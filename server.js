@@ -3,8 +3,13 @@ require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const { connectDB, disconnectDB } = require('./config/db');
+const { getJwtSecret } = require('./middleware/auth');
 const healthRoutes = require('./routes/healthRoutes');
+const authRoutes = require('./routes/authRoutes');
+const societyRoutes = require('./routes/societyRoutes');
+const { csrfProtection } = require('./middleware/csrf');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -29,8 +34,16 @@ app.use(limiter);
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
-// Health check and root route
+// Cookie parsing for HttpOnly JWT authentication
+app.use(cookieParser());
+
+// CSRF defense middleware
+app.use(csrfProtection);
+
+// Mount API routes
 app.use('/', healthRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/societies', societyRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);
@@ -46,6 +59,8 @@ const PORT = process.env.PORT || 3000;
  */
 async function startServer() {
   try {
+    // Proactively validate JWT security configuration before opening listeners
+    getJwtSecret();
     await connectDB();
     const server = app.listen(PORT, () => {
       console.log(`Server listening on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);

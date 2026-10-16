@@ -51,8 +51,175 @@ const ALLOWED_TRANSITIONS = {
   cancelled: {} // Terminal state
 };
 
-const ADMIN_UPDATEABLE_FIELDS = ['title', 'description', 'category', 'location', 'priority', 'externalProviderDetails'];
+const ADMIN_UPDATEABLE_FIELDS = [
+  'title',
+  'description',
+  'category',
+  'location',
+  'priority',
+  'externalProviderDetails',
+  'costs',
+  'completionDetails'
+];
 const RESIDENT_UPDATEABLE_FIELDS = ['title', 'description', 'category', 'location'];
+
+/**
+ * Validate and sanitize costs object.
+ * Enforces non-negative finite numbers with reasonable bounds and no unknown fields.
+ */
+function validateCosts(costs) {
+  if (!costs || typeof costs !== 'object' || Array.isArray(costs)) {
+    return { valid: false, message: 'Costs must be a valid object.' };
+  }
+
+  const allowedKeys = ['materialCost', 'laborCost', 'otherCost', 'totalCost', 'currency'];
+  const unknown = Object.keys(costs).filter((k) => !allowedKeys.includes(k));
+  if (unknown.length > 0) {
+    return { valid: false, message: `Invalid field(s) in costs: ${unknown.join(', ')}` };
+  }
+
+  const numFields = ['materialCost', 'laborCost', 'otherCost', 'totalCost'];
+  const maxBound = 30000000; // 30,000,000 reasonable upper bound
+
+  for (const field of numFields) {
+    if (costs[field] !== undefined) {
+      const val = costs[field];
+      if (typeof val !== 'number' || !Number.isFinite(val) || isNaN(val)) {
+        return { valid: false, message: `${field} must be a valid finite number.` };
+      }
+      if (val < 0) {
+        return { valid: false, message: `${field} cannot be negative.` };
+      }
+      if (val > maxBound) {
+        return { valid: false, message: `${field} exceeds maximum reasonable bound of ${maxBound.toLocaleString()}.` };
+      }
+    }
+  }
+
+  let currency = 'INR';
+  if (costs.currency !== undefined) {
+    if (typeof costs.currency !== 'string' || !costs.currency.trim() || costs.currency.trim().length > 10) {
+      return { valid: false, message: 'Currency must be a string up to 10 characters.' };
+    }
+    currency = costs.currency.trim().toUpperCase();
+  }
+
+  const hasItemized = costs.materialCost !== undefined || costs.laborCost !== undefined || costs.otherCost !== undefined;
+  const materialCost = typeof costs.materialCost === 'number' ? costs.materialCost : 0;
+  const laborCost = typeof costs.laborCost === 'number' ? costs.laborCost : 0;
+  const otherCost = typeof costs.otherCost === 'number' ? costs.otherCost : 0;
+
+  // STRICT: If itemized costs are provided, server ALWAYS calculates totalCost as their sum.
+  // If only totalCost is provided, use that validated totalCost.
+  const totalCost = hasItemized
+    ? materialCost + laborCost + otherCost
+    : (typeof costs.totalCost === 'number' ? costs.totalCost : 0);
+
+  if (totalCost > maxBound) {
+    return { valid: false, message: `totalCost exceeds maximum reasonable bound of ${maxBound.toLocaleString()}.` };
+  }
+
+  return {
+    valid: true,
+    data: {
+      materialCost,
+      laborCost,
+      otherCost,
+      totalCost,
+      currency
+    }
+  };
+}
+
+/**
+ * Validate and sanitize completion details object and evidence items.
+ */
+function validateCompletionDetails(details) {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
+    return { valid: false, message: 'Completion details must be a valid object.' };
+  }
+
+  const allowedKeys = ['workSummary', 'completedAt', 'completedBy', 'evidence'];
+  const unknown = Object.keys(details).filter((k) => !allowedKeys.includes(k));
+  if (unknown.length > 0) {
+    return { valid: false, message: `Invalid field(s) in completion details: ${unknown.join(', ')}` };
+  }
+
+  const sanitized = {};
+
+  if (details.workSummary !== undefined) {
+    if (typeof details.workSummary !== 'string') {
+      return { valid: false, message: 'Work summary must be a string.' };
+    }
+    if (details.workSummary.trim().length > 2000) {
+      return { valid: false, message: 'Work summary cannot exceed 2000 characters.' };
+    }
+    sanitized.workSummary = details.workSummary.trim();
+  }
+
+  if (details.completedAt !== undefined) {
+    const parsedDate = Date.parse(details.completedAt);
+    if (isNaN(parsedDate)) {
+      return { valid: false, message: 'Completed at must be a valid date.' };
+    }
+    if (parsedDate > Date.now() + 60000) {
+      return { valid: false, message: 'Completed at date cannot be in the future.' };
+    }
+    sanitized.completedAt = new Date(parsedDate);
+  } else {
+    sanitized.completedAt = new Date();
+  }
+
+  if (details.completedBy !== undefined) {
+    if (typeof details.completedBy !== 'string' || details.completedBy.trim().length > 100) {
+      return { valid: false, message: 'Completed by must be a string up to 100 characters.' };
+    }
+    sanitized.completedBy = details.completedBy.trim();
+  }
+
+  if (details.evidence !== undefined) {
+    if (!Array.isArray(details.evidence)) {
+      return { valid: false, message: 'Evidence must be an array of evidence items.' };
+    }
+    const sanitizedEvidence = [];
+    for (const item of details.evidence) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return { valid: false, message: 'Each evidence item must be an object.' };
+      }
+      const allowedItemKeys = ['caption', 'referenceUrl', 'isInternal'];
+      const unknownItemKeys = Object.keys(item).filter((k) => !allowedItemKeys.includes(k));
+      if (unknownItemKeys.length > 0) {
+        return { valid: false, message: `Invalid field(s) in evidence item: ${unknownItemKeys.join(', ')}` };
+      }
+
+      const caption = item.caption ? String(item.caption).trim().slice(0, 200) : '';
+      let referenceUrl = '';
+      if (item.referenceUrl !== undefined && item.referenceUrl !== null) {
+        if (typeof item.referenceUrl !== 'string') {
+          return { valid: false, message: 'Evidence referenceUrl must be a string.' };
+        }
+        referenceUrl = item.referenceUrl.trim();
+        if (referenceUrl.length > 500) {
+          return { valid: false, message: 'Evidence referenceUrl cannot exceed 500 characters.' };
+        }
+        if (/^javascript:/i.test(referenceUrl)) {
+          return { valid: false, message: 'Evidence referenceUrl contains an invalid or unsafe protocol.' };
+        }
+      }
+      const isInternal = Boolean(item.isInternal);
+
+      sanitizedEvidence.push({
+        caption,
+        referenceUrl,
+        isInternal,
+        uploadedAt: new Date()
+      });
+    }
+    sanitized.evidence = sanitizedEvidence;
+  }
+
+  return { valid: true, data: sanitized };
+}
 
 /**
  * Create a new issue in the society.
@@ -264,7 +431,7 @@ async function getIssue(req, res, next) {
 async function updateStatus(req, res, next) {
   try {
     const { issueId } = req.params;
-    const { toStatus, note, scheduledDate, cancellationReason } = req.body;
+    const { toStatus, note, scheduledDate, cancellationReason, costs, completionDetails, resolutionSummary } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(issueId)) {
       return res.status(400).json({
@@ -359,6 +526,30 @@ async function updateStatus(req, res, next) {
       issue.cancellationReason = reason;
     }
 
+    if (toStatus === 'completion_submitted') {
+      if (costs !== undefined) {
+        const costRes = validateCosts(costs);
+        if (!costRes.valid) {
+          return res.status(400).json({
+            success: false,
+            message: costRes.message
+          });
+        }
+        issue.costs = costRes.data;
+      }
+
+      if (completionDetails !== undefined) {
+        const compRes = validateCompletionDetails(completionDetails);
+        if (!compRes.valid) {
+          return res.status(400).json({
+            success: false,
+            message: compRes.message
+          });
+        }
+        issue.completionDetails = compRes.data;
+      }
+    }
+
     if (toStatus === 'verification_rejected') {
       if (!note || note.trim().length === 0) {
         return res.status(400).json({
@@ -366,6 +557,25 @@ async function updateStatus(req, res, next) {
           message: 'A note explaining why verification was rejected is required.'
         });
       }
+      issue.verificationDetails = {
+        verifiedBy: req.user._id,
+        verifiedAt: new Date(),
+        decision: 'verification_rejected',
+        notes: note.trim()
+      };
+    }
+
+    if (toStatus === 'verified_closed') {
+      const summaryText = resolutionSummary !== undefined ? String(resolutionSummary).trim() : (note ? note.trim() : '');
+      if (summaryText) {
+        issue.resolutionSummary = summaryText;
+      }
+      issue.verificationDetails = {
+        verifiedBy: req.user._id,
+        verifiedAt: new Date(),
+        decision: 'verified_closed',
+        notes: note ? note.trim() : summaryText
+      };
     }
 
     if (toStatus === 'awaiting_information') {
@@ -453,6 +663,21 @@ async function updateIssue(req, res, next) {
       });
     }
 
+    // Terminal and closed states cannot be updated via normal update
+    if (issue.status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot update an issue that has been cancelled.'
+      });
+    }
+
+    if (issue.status === 'verified_closed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot update an issue that has been verified and closed. Reopen the issue to make changes.'
+      });
+    }
+
     // Residents can only edit core fields in submitted or awaiting_information
     if (!isAdmin) {
       if (!['submitted', 'awaiting_information'].includes(issue.status)) {
@@ -472,7 +697,17 @@ async function updateIssue(req, res, next) {
     }
 
     // Reject attempt to modify read-only or prohibited properties
-    const prohibitedFields = ['_id', 'status', 'history', 'society', 'submittingResident', 'createdAt', 'updatedAt'];
+    const prohibitedFields = [
+      '_id',
+      'status',
+      'history',
+      'society',
+      'submittingResident',
+      'createdAt',
+      'updatedAt',
+      'verificationDetails',
+      'resolutionSummary'
+    ];
     for (const key of incomingFields) {
       if (prohibitedFields.includes(key)) {
         return res.status(400).json({
@@ -492,7 +727,16 @@ async function updateIssue(req, res, next) {
       });
     }
 
-    const { title, description, category, location, priority, externalProviderDetails } = req.body;
+    const {
+      title,
+      description,
+      category,
+      location,
+      priority,
+      externalProviderDetails,
+      costs,
+      completionDetails
+    } = req.body;
 
     if (title !== undefined) {
       if (typeof title !== 'string' || title.trim().length < 5 || title.trim().length > 120) {
@@ -606,6 +850,28 @@ async function updateIssue(req, res, next) {
           trade: externalProviderDetails.trade ? String(externalProviderDetails.trade).trim() : ''
         };
       }
+
+      if (costs !== undefined) {
+        const costRes = validateCosts(costs);
+        if (!costRes.valid) {
+          return res.status(400).json({
+            success: false,
+            message: costRes.message
+          });
+        }
+        issue.costs = costRes.data;
+      }
+
+      if (completionDetails !== undefined) {
+        const compRes = validateCompletionDetails(completionDetails);
+        if (!compRes.valid) {
+          return res.status(400).json({
+            success: false,
+            message: compRes.message
+          });
+        }
+        issue.completionDetails = compRes.data;
+      }
     }
 
     // Append server-generated audit event
@@ -710,11 +976,94 @@ async function addNote(req, res, next) {
   }
 }
 
+/**
+ * Record repair progress on an issue (Admin-only).
+ */
+async function recordProgress(req, res, next) {
+  try {
+    const { issueId } = req.params;
+    const { note, progressPercentage, isInternal } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(issueId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid issue ID format.'
+      });
+    }
+
+    if (!note || typeof note !== 'string' || note.trim().length < 2 || note.trim().length > 1000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Progress note must be between 2 and 1000 characters.'
+      });
+    }
+
+    if (progressPercentage !== undefined) {
+      if (typeof progressPercentage !== 'number' || !Number.isFinite(progressPercentage) || progressPercentage < 0 || progressPercentage > 100) {
+        return res.status(400).json({
+          success: false,
+          message: 'Progress percentage must be a finite number between 0 and 100.'
+        });
+      }
+    }
+
+    const issue = await Issue.findOne({
+      _id: issueId,
+      society: req.society._id
+    });
+
+    if (!issue) {
+      return res.status(404).json({
+        success: false,
+        message: 'Issue not found in this society.'
+      });
+    }
+
+    // Progress updates are permitted on active repair statuses
+    const allowedProgressStatuses = ['scheduled', 'in_progress', 'under_review', 'reopened', 'verification_rejected'];
+    if (!allowedProgressStatuses.includes(issue.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot record progress on an issue with status "${issue.status}".`
+      });
+    }
+
+    const formattedNote = progressPercentage !== undefined
+      ? `[${progressPercentage}%] ${note.trim()}`
+      : note.trim();
+
+    issue.history.push({
+      action: 'progress_recorded',
+      changedBy: req.user._id,
+      note: formattedNote,
+      isInternal: Boolean(isInternal),
+      changedAt: new Date()
+    });
+
+    await issue.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Progress recorded successfully',
+      issue: issue.toClientJSON(req.membership.role, req.user._id)
+    });
+  } catch (error) {
+    if (error.name === 'VersionError') {
+      return res.status(409).json({
+        success: false,
+        message: 'Conflict: This issue was modified by another request. Please reload and try again.'
+      });
+    }
+    next(error);
+  }
+}
+
 module.exports = {
   createIssue,
   listIssues,
   getIssue,
   updateStatus,
   updateIssue,
-  addNote
+  addNote,
+  recordProgress
 };

@@ -32,7 +32,7 @@ const issueEventSchema = new mongoose.Schema(
   {
     action: {
       type: String,
-      enum: ['created', 'status_change', 'priority_change', 'details_updated', 'note_added'],
+      enum: ['created', 'status_change', 'priority_change', 'details_updated', 'note_added', 'progress_recorded'],
       required: true
     },
     fromStatus: {
@@ -64,6 +64,109 @@ const issueEventSchema = new mongoose.Schema(
     }
   },
   { _id: true }
+);
+
+const repairCostSchema = new mongoose.Schema(
+  {
+    materialCost: {
+      type: Number,
+      min: [0, 'Material cost cannot be negative'],
+      default: 0
+    },
+    laborCost: {
+      type: Number,
+      min: [0, 'Labor cost cannot be negative'],
+      default: 0
+    },
+    otherCost: {
+      type: Number,
+      min: [0, 'Other cost cannot be negative'],
+      default: 0
+    },
+    totalCost: {
+      type: Number,
+      min: [0, 'Total cost cannot be negative'],
+      default: 0
+    },
+    currency: {
+      type: String,
+      trim: true,
+      maxlength: [10, 'Currency cannot exceed 10 characters'],
+      default: 'INR'
+    }
+  },
+  { _id: false }
+);
+
+const evidenceItemSchema = new mongoose.Schema(
+  {
+    caption: {
+      type: String,
+      trim: true,
+      maxlength: [200, 'Caption cannot exceed 200 characters'],
+      default: ''
+    },
+    referenceUrl: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Reference URL cannot exceed 500 characters'],
+      default: ''
+    },
+    isInternal: {
+      type: Boolean,
+      default: false
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  { _id: true }
+);
+
+const completionDetailsSchema = new mongoose.Schema(
+  {
+    workSummary: {
+      type: String,
+      trim: true,
+      maxlength: [2000, 'Work summary cannot exceed 2000 characters'],
+      default: ''
+    },
+    completedAt: {
+      type: Date
+    },
+    completedBy: {
+      type: String,
+      trim: true,
+      maxlength: [100, 'Completed by cannot exceed 100 characters'],
+      default: ''
+    },
+    evidence: [evidenceItemSchema]
+  },
+  { _id: false }
+);
+
+const verificationDetailsSchema = new mongoose.Schema(
+  {
+    verifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    verifiedAt: {
+      type: Date
+    },
+    decision: {
+      type: String,
+      enum: ['verified_closed', 'verification_rejected']
+    },
+    notes: {
+      type: String,
+      trim: true,
+      maxlength: [1000, 'Verification notes cannot exceed 1000 characters'],
+      default: ''
+    }
+  },
+  { _id: false }
 );
 
 const issueSchema = new mongoose.Schema(
@@ -163,6 +266,15 @@ const issueSchema = new mongoose.Schema(
       trim: true,
       default: ''
     },
+    costs: {
+      type: repairCostSchema
+    },
+    completionDetails: {
+      type: completionDetailsSchema
+    },
+    verificationDetails: {
+      type: verificationDetailsSchema
+    },
     history: [issueEventSchema]
   },
   {
@@ -210,8 +322,20 @@ issueSchema.methods.toClientJSON = function (role, requesterUserId) {
   const obj = this.toObject();
 
   if (role !== 'admin') {
-    // Redact provider data from residents
+    // Redact provider data and repair costs from residents
     delete obj.externalProviderDetails;
+    delete obj.costs;
+
+    // Filter out internal evidence metadata from completion details
+    if (obj.completionDetails && Array.isArray(obj.completionDetails.evidence)) {
+      obj.completionDetails.evidence = obj.completionDetails.evidence.filter((e) => !e.isInternal);
+    }
+
+    // Redact admin contact details from verification details if populated
+    if (obj.verificationDetails && obj.verificationDetails.verifiedBy && typeof obj.verificationDetails.verifiedBy === 'object') {
+      delete obj.verificationDetails.verifiedBy.email;
+      delete obj.verificationDetails.verifiedBy.phone;
+    }
 
     // Filter out internal notes from history and redact other users' contact info
     if (Array.isArray(obj.history)) {

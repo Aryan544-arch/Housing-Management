@@ -5,7 +5,8 @@ const {
   getIssue,
   updateStatus,
   updateIssue,
-  addNote
+  addNote,
+  recordProgress
 } = require('../controllers/issueController');
 const { getProviderSuggestions } = require('../controllers/providerController');
 const { authenticate, requireSocietyMember } = require('../middleware/auth');
@@ -23,6 +24,9 @@ router.get('/:issueId', getIssue);
 router.patch('/:issueId/status', updateStatus);
 router.patch('/:issueId', updateIssue);
 router.post('/:issueId/notes', addNote);
+
+// Admin-only repair progress recording
+router.post('/:issueId/progress', requireSocietyMember(['admin']), recordProgress);
 
 // Admin-only issue provider suggestions
 router.get('/:issueId/provider-suggestions', requireSocietyMember(['admin']), getProviderSuggestions);

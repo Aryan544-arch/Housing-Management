@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { Issue, ISSUE_STATUSES, ISSUE_PRIORITIES, ISSUE_CATEGORIES } = require('../models/Issue');
+const { dispatchIssueEvent } = require('../services/notifications/notificationService');
 
 // Enforced State Machine Transition Matrix
 const ALLOWED_TRANSITIONS = {
@@ -306,6 +307,17 @@ async function createIssue(req, res, next) {
 
     await issue.save();
 
+    // Safely dispatch issue creation notification (best-effort, non-blocking)
+    const creationEvent = issue.history[0];
+    if (creationEvent) {
+      await dispatchIssueEvent({
+        issue,
+        event: creationEvent,
+        actor: { _id: req.user._id, role: req.membership.role },
+        societyId: req.society._id
+      });
+    }
+
     res.status(201).json({
       success: true,
       message: 'Issue submitted successfully',
@@ -609,6 +621,17 @@ async function updateStatus(req, res, next) {
     issue.status = toStatus;
     await issue.save();
 
+    // Safely dispatch status change notification (best-effort, non-blocking)
+    const statusEvent = issue.history[issue.history.length - 1];
+    if (statusEvent) {
+      await dispatchIssueEvent({
+        issue,
+        event: statusEvent,
+        actor: { _id: req.user._id, role: req.membership.role },
+        societyId: req.society._id
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: `Status updated to ${toStatus}`,
@@ -884,6 +907,17 @@ async function updateIssue(req, res, next) {
 
     await issue.save();
 
+    // Safely dispatch details updated notification (best-effort, non-blocking)
+    const updateEvent = issue.history[issue.history.length - 1];
+    if (updateEvent) {
+      await dispatchIssueEvent({
+        issue,
+        event: updateEvent,
+        actor: { _id: req.user._id, role: req.membership.role },
+        societyId: req.society._id
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: 'Issue updated successfully',
@@ -959,6 +993,17 @@ async function addNote(req, res, next) {
     });
 
     await issue.save();
+
+    // Safely dispatch note added notification (best-effort, non-blocking)
+    const noteEvent = issue.history[issue.history.length - 1];
+    if (noteEvent) {
+      await dispatchIssueEvent({
+        issue,
+        event: noteEvent,
+        actor: { _id: req.user._id, role: req.membership.role },
+        societyId: req.society._id
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -1041,6 +1086,17 @@ async function recordProgress(req, res, next) {
     });
 
     await issue.save();
+
+    // Safely dispatch progress recorded notification (best-effort, non-blocking)
+    const progressEvent = issue.history[issue.history.length - 1];
+    if (progressEvent) {
+      await dispatchIssueEvent({
+        issue,
+        event: progressEvent,
+        actor: { _id: req.user._id, role: req.membership.role },
+        societyId: req.society._id
+      });
+    }
 
     res.status(201).json({
       success: true,

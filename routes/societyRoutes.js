@@ -31,4 +31,8 @@ router.use('/:societyId/issues', issueRoutes);
 const providerRoutes = require('./providerRoutes');
 router.use('/:societyId/providers', providerRoutes);
 
+// Mount notification management sub-router
+const notificationRoutes = require('./notificationRoutes');
+router.use('/:societyId/notifications', authenticate, requireSocietyMember(), notificationRoutes);
+
 module.exports = router;

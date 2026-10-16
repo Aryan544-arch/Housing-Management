@@ -1,0 +1,250 @@
+const { ISSUE_CATEGORIES, ISSUE_PRIORITIES } = require('../../models/Issue');
+const GemmaAdapter = require('./gemmaAdapter');
+
+let activeAdapter = null;
+const defaultAdapter = new GemmaAdapter();
+
+/**
+ * Configure or override the active AI model adapter (useful for testing or swapping providers).
+ *
+ * @param {object} adapter - An adapter instance implementing generateAnalysis(promptPayload)
+ */
+function setAdapter(adapter) {
+  activeAdapter = adapter;
+}
+
+/**
+ * Reset the active AI model adapter to the default GemmaAdapter.
+ */
+function resetAdapter() {
+  activeAdapter = null;
+}
+
+/**
+ * Retrieve the currently configured adapter.
+ *
+ * @returns {object}
+ */
+function getAdapter() {
+  return activeAdapter || defaultAdapter;
+}
+
+/**
+ * Check whether AI advisory functionality is globally enabled.
+ *
+ * @returns {boolean}
+ */
+function isAiAdvisoryEnabled() {
+  return process.env.AI_ADVISORY_ENABLED === 'true';
+}
+
+/**
+ * Extract minimal, privacy-scrubbed context from an issue.
+ * Strictly excludes submitter personal info, user IDs, flat numbers, provider data,
+ * costs, internal notes, and history events.
+ *
+ * @param {object} issue - Mongoose Issue document or plain object
+ * @returns {object} Sanitized minimal issue data
+ */
+function buildPrompt(issue) {
+  if (!issue || typeof issue !== 'object') {
+    throw new Error('Valid issue object is required for prompt generation.');
+  }
+
+  const title = issue.title ? String(issue.title).trim() : '';
+  const description = issue.description ? String(issue.description).trim() : '';
+  const category = issue.category ? String(issue.category).trim() : 'other';
+  const locationType = issue.location && issue.location.type ? String(issue.location.type).trim() : 'unknown';
+  const areaDescription =
+    issue.location && issue.location.type === 'common_area' && issue.location.areaDescription
+      ? String(issue.location.areaDescription).trim()
+      : '';
+
+  return {
+    title,
+    description,
+    category,
+    locationType,
+    areaDescription
+  };
+}
+
+/**
+ * Validate and sanitize untrusted AI model output.
+ * Handles markdown fences, invalid JSON, unexpected types, and out-of-range values.
+ *
+ * @param {string|object} rawOutput - Output returned by AI adapter
+ * @returns {{ valid: boolean, message?: string, data?: object }}
+ */
+function validateAndSanitizeAdvisory(rawOutput) {
+  if (rawOutput === null || rawOutput === undefined) {
+    return { valid: false, message: 'Model returned empty or null output.' };
+  }
+
+  let parsed;
+  if (typeof rawOutput === 'object' && !Array.isArray(rawOutput)) {
+    parsed = rawOutput;
+  } else if (typeof rawOutput === 'string') {
+    let text = rawOutput.trim();
+    // Strip markdown code fences if model enclosed JSON in ```json ... ```
+    if (text.startsWith('```')) {
+      text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    }
+    try {
+      parsed = JSON.parse(text);
+    } catch (parseErr) {
+      return { valid: false, message: 'Model output is not valid JSON.' };
+    }
+  } else {
+    return { valid: false, message: 'Model output must be a valid JSON string or object.' };
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { valid: false, message: 'Parsed advisory must be a non-null JSON object.' };
+  }
+
+  // 1. Suggested Category (strictly restricted to supported ISSUE_CATEGORIES, safe fallback)
+  let suggestedCategory = 'other';
+  if (typeof parsed.suggestedCategory === 'string') {
+    const candidate = parsed.suggestedCategory.trim().toLowerCase();
+    if (ISSUE_CATEGORIES.includes(candidate)) {
+      suggestedCategory = candidate;
+    }
+  }
+
+  // 2. Suggested Priority (strictly restricted to supported ISSUE_PRIORITIES, safe fallback)
+  let suggestedPriority = 'normal';
+  if (typeof parsed.suggestedPriority === 'string') {
+    const candidate = parsed.suggestedPriority.trim().toLowerCase();
+    if (ISSUE_PRIORITIES.includes(candidate)) {
+      suggestedPriority = candidate;
+    }
+  }
+
+  // 3. Explanation (bounded string, fallback if empty)
+  let explanation = '';
+  if (typeof parsed.explanation === 'string') {
+    explanation = parsed.explanation.trim().slice(0, 1000);
+  }
+  if (!explanation) {
+    explanation = 'Automated preliminary triage suggestion based on reported issue details.';
+  }
+
+  // 4. Missing Information / Clarification Questions (bounded array of strings)
+  let missingInformation = [];
+  if (Array.isArray(parsed.missingInformation)) {
+    missingInformation = parsed.missingInformation
+      .filter((item) => typeof item === 'string' && item.trim().length > 0)
+      .slice(0, 5)
+      .map((item) => item.trim().slice(0, 300));
+  }
+
+  return {
+    valid: true,
+    data: {
+      suggestedCategory,
+      suggestedPriority,
+      explanation,
+      missingInformation,
+      requiresHumanReview: true,
+      disclaimer:
+        'Advisory suggestions are generated by AI for triage assistance and require human review. They do not alter issue records or replace management decisions.'
+    }
+  };
+}
+
+/**
+ * Execute issue analysis using the configured AI adapter.
+ * Does not mutate the issue in the database.
+ *
+ * @param {object} issue - Mongoose Issue document or plain object
+ * @param {object} [options]
+ * @param {boolean} [options.forceEnabled] - Override environment enable check for tests
+ * @param {object} [options.adapter] - Override adapter for specific request
+ * @returns {Promise<{ success: boolean, advisory?: object, error?: string, statusCode?: number }>}
+ */
+async function analyzeIssue(issue, options = {}) {
+  const isEnabled = isAiAdvisoryEnabled() || options.forceEnabled;
+  if (!isEnabled) {
+    return {
+      success: false,
+      statusCode: 503,
+      error: 'AI advisory service is disabled or not configured.'
+    };
+  }
+
+  const adapter = options.adapter || getAdapter();
+  if (!adapter || (typeof adapter.isConfigured === 'function' && !adapter.isConfigured() && !options.forceEnabled)) {
+    return {
+      success: false,
+      statusCode: 503,
+      error: 'AI advisory model endpoint is not configured.'
+    };
+  }
+
+  const promptData = buildPrompt(issue);
+
+  const systemPrompt = `You are a triage assistant for a housing society management system. Analyze the reported issue and provide recommendations strictly in JSON format.
+Allowed categories: ${ISSUE_CATEGORIES.join(', ')}.
+Allowed priorities: ${ISSUE_PRIORITIES.join(', ')}.
+Return a valid JSON object matching this schema:
+{
+  "suggestedCategory": "<one of the allowed categories>",
+  "suggestedPriority": "<one of the allowed priorities>",
+  "explanation": "<short explanation under 300 words>",
+  "missingInformation": ["<clarification question 1>", "<clarification question 2>"]
+}`;
+
+  const userPromptLines = [
+    `Title: ${promptData.title}`,
+    `Description: ${promptData.description}`,
+    `Current Category: ${promptData.category}`,
+    `Location Type: ${promptData.locationType}`
+  ];
+  if (promptData.areaDescription) {
+    userPromptLines.push(`Area Description: ${promptData.areaDescription}`);
+  }
+  const userPrompt = userPromptLines.join('\n');
+
+  let rawOutput;
+  try {
+    rawOutput = await adapter.generateAnalysis({ systemPrompt, userPrompt });
+  } catch (err) {
+    if (err.code === 'TIMEOUT' || err.statusCode === 504) {
+      return {
+        success: false,
+        statusCode: 504,
+        error: 'AI advisory service timed out. Please try again later.'
+      };
+    }
+    return {
+      success: false,
+      statusCode: err.statusCode || 503,
+      error: 'AI advisory service is currently unavailable.'
+    };
+  }
+
+  const validation = validateAndSanitizeAdvisory(rawOutput);
+  if (!validation.valid) {
+    return {
+      success: false,
+      statusCode: 502,
+      error: 'AI advisory service returned an invalid response format.'
+    };
+  }
+
+  return {
+    success: true,
+    advisory: validation.data
+  };
+}
+
+module.exports = {
+  buildPrompt,
+  validateAndSanitizeAdvisory,
+  analyzeIssue,
+  setAdapter,
+  resetAdapter,
+  getAdapter,
+  isAiAdvisoryEnabled
+};

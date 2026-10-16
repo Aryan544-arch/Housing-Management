@@ -7,6 +7,7 @@ const {
   updateIssue,
   addNote
 } = require('../controllers/issueController');
+const { getProviderSuggestions } = require('../controllers/providerController');
 const { authenticate, requireSocietyMember } = require('../middleware/auth');
 
 const router = express.Router({ mergeParams: true });
@@ -22,5 +23,8 @@ router.get('/:issueId', getIssue);
 router.patch('/:issueId/status', updateStatus);
 router.patch('/:issueId', updateIssue);
 router.post('/:issueId/notes', addNote);
+
+// Admin-only issue provider suggestions
+router.get('/:issueId/provider-suggestions', requireSocietyMember(['admin']), getProviderSuggestions);
 
 module.exports = router;

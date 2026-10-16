@@ -27,4 +27,8 @@ router.post('/:societyId/admin-action', authenticate, requireSocietyMember(['adm
 const issueRoutes = require('./issueRoutes');
 router.use('/:societyId/issues', issueRoutes);
 
+// Mount provider management sub-router
+const providerRoutes = require('./providerRoutes');
+router.use('/:societyId/providers', providerRoutes);
+
 module.exports = router;

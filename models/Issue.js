@@ -112,6 +112,33 @@ const evidenceItemSchema = new mongoose.Schema(
       maxlength: [500, 'Reference URL cannot exceed 500 characters'],
       default: ''
     },
+    originalFilename: {
+      type: String,
+      trim: true,
+      maxlength: [255, 'Filename cannot exceed 255 characters'],
+      default: ''
+    },
+    storedFilename: {
+      type: String,
+      trim: true,
+      maxlength: [255, 'Stored filename cannot exceed 255 characters'],
+      default: ''
+    },
+    mimeType: {
+      type: String,
+      trim: true,
+      maxlength: [100, 'MIME type cannot exceed 100 characters'],
+      default: ''
+    },
+    sizeBytes: {
+      type: Number,
+      min: [0, 'File size cannot be negative'],
+      default: 0
+    },
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
     isInternal: {
       type: Boolean,
       default: false
@@ -275,6 +302,7 @@ const issueSchema = new mongoose.Schema(
     verificationDetails: {
       type: verificationDetailsSchema
     },
+    evidence: [evidenceItemSchema],
     history: [issueEventSchema]
   },
   {
@@ -331,6 +359,11 @@ issueSchema.methods.toClientJSON = function (role, requesterUserId) {
       obj.completionDetails.evidence = obj.completionDetails.evidence.filter((e) => !e.isInternal);
     }
 
+    // Filter out internal evidence metadata from root issue evidence
+    if (Array.isArray(obj.evidence)) {
+      obj.evidence = obj.evidence.filter((e) => !e.isInternal);
+    }
+
     // Redact admin contact details from verification details if populated
     if (obj.verificationDetails && obj.verificationDetails.verifiedBy && typeof obj.verificationDetails.verifiedBy === 'object') {
       delete obj.verificationDetails.verifiedBy.email;
@@ -369,6 +402,22 @@ issueSchema.methods.toClientJSON = function (role, requesterUserId) {
         delete obj.submittingResident.email;
       }
     }
+  }
+
+  // Ensure internal disk storage filenames are never leaked to clients
+  const sanitizeEvidenceList = (list) => {
+    if (!Array.isArray(list)) return;
+    for (const item of list) {
+      if (item && typeof item === 'object') {
+        delete item.storedFilename;
+      }
+    }
+  };
+  if (obj.completionDetails && Array.isArray(obj.completionDetails.evidence)) {
+    sanitizeEvidenceList(obj.completionDetails.evidence);
+  }
+  if (Array.isArray(obj.evidence)) {
+    sanitizeEvidenceList(obj.evidence);
   }
 
   delete obj.__v;

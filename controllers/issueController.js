@@ -187,7 +187,7 @@ function validateCompletionDetails(details) {
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
         return { valid: false, message: 'Each evidence item must be an object.' };
       }
-      const allowedItemKeys = ['caption', 'referenceUrl', 'isInternal'];
+      const allowedItemKeys = ['caption', 'referenceUrl', 'isInternal', 'originalFilename', 'mimeType', 'sizeBytes', '_id', 'uploadedAt'];
       const unknownItemKeys = Object.keys(item).filter((k) => !allowedItemKeys.includes(k));
       if (unknownItemKeys.length > 0) {
         return { valid: false, message: `Invalid field(s) in evidence item: ${unknownItemKeys.join(', ')}` };
@@ -209,12 +209,18 @@ function validateCompletionDetails(details) {
       }
       const isInternal = Boolean(item.isInternal);
 
-      sanitizedEvidence.push({
+      const evidenceObj = {
         caption,
         referenceUrl,
         isInternal,
-        uploadedAt: new Date()
-      });
+        uploadedAt: item.uploadedAt ? new Date(item.uploadedAt) : new Date()
+      };
+      if (item._id) evidenceObj._id = item._id;
+      if (item.originalFilename) evidenceObj.originalFilename = String(item.originalFilename).trim().slice(0, 255);
+      if (item.mimeType) evidenceObj.mimeType = String(item.mimeType).trim().slice(0, 100);
+      if (typeof item.sizeBytes === 'number' && item.sizeBytes >= 0) evidenceObj.sizeBytes = item.sizeBytes;
+
+      sanitizedEvidence.push(evidenceObj);
     }
     sanitized.evidence = sanitizedEvidence;
   }

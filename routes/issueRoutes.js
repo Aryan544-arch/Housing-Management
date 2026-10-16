@@ -8,6 +8,11 @@ const {
   addNote,
   recordProgress
 } = require('../controllers/issueController');
+const {
+  uploadEvidence,
+  downloadEvidence
+} = require('../controllers/evidenceController');
+const { uploadEvidenceMiddleware } = require('../middleware/upload');
 const rateLimit = require('express-rate-limit');
 const { getProviderSuggestions } = require('../controllers/providerController');
 const { getIssueAdvisory } = require('../controllers/aiAdvisoryController');
@@ -38,6 +43,10 @@ router.get('/:issueId', getIssue);
 router.patch('/:issueId/status', updateStatus);
 router.patch('/:issueId', updateIssue);
 router.post('/:issueId/notes', addNote);
+
+// Secure private evidence upload and download
+router.post('/:issueId/evidence', uploadEvidenceMiddleware, uploadEvidence);
+router.get('/:issueId/evidence/:evidenceId', downloadEvidence);
 
 // Admin-only repair progress recording
 router.post('/:issueId/progress', requireSocietyMember(['admin']), recordProgress);

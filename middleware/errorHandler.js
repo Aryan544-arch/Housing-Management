@@ -16,11 +16,23 @@ function errorHandler(err, req, res, next) {
     return next(err);
   }
 
-  const statusCode = res.statusCode && res.statusCode !== 200 ? res.statusCode : (err.statusCode || 500);
+  let statusCode = res.statusCode && res.statusCode !== 200 ? res.statusCode : (err.statusCode || 500);
+  let message = err.message || 'Internal Server Error';
+
+  if (err.name === 'ValidationError') {
+    statusCode = 400;
+    message = err.message;
+  } else if (err.name === 'CastError') {
+    statusCode = 400;
+    message = `Invalid format for field "${err.path}".`;
+  } else if (err.name === 'VersionError') {
+    statusCode = 409;
+    message = 'Conflict: The record was modified by another request. Please reload and try again.';
+  }
 
   const response = {
     success: false,
-    message: err.message || 'Internal Server Error'
+    message
   };
 
   if (process.env.NODE_ENV !== 'production') {

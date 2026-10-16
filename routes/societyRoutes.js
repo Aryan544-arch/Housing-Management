@@ -23,4 +23,8 @@ router.get('/:societyId/protected-data', authenticate, requireSocietyMember(), g
 router.post('/:societyId/members', authenticate, requireSocietyMember(['admin']), addMember);
 router.post('/:societyId/admin-action', authenticate, requireSocietyMember(['admin']), executeAdminAction);
 
+// Mount issue management sub-router
+const issueRoutes = require('./issueRoutes');
+router.use('/:societyId/issues', issueRoutes);
+
 module.exports = router;

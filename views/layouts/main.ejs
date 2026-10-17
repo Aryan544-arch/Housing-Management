@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Housing Management Portal — Architectural Editorial Operations for Societies, Issues, and Maintenance">
+  <meta name="csrf-token" content="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+  <title><%= typeof title !== 'undefined' ? title + ' | Housing Management' : 'Housing Society Operations Portal' %></title>
+  
+  <!-- Architectural Editorial Typography: Fraunces, Plus Jakarta Sans, IBM Plex Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/main.css">
+  <%- typeof extraCss !== 'undefined' ? extraCss : '' %>
+</head>
+<body>
+  <!-- Global Application Header & Navigation Bar -->
+  <%- include('../partials/navbar', { user: typeof user !== 'undefined' ? user : null, activeSociety: typeof activeSociety !== 'undefined' ? activeSociety : null, memberships: typeof memberships !== 'undefined' ? memberships : [] }) %>
+
+  <!-- Main View Container -->
+  <main class="main-content">
+    <%- body %>
+  </main>
+
+  <!-- Global Architectural Footer -->
+  <%- include('../partials/footer') %>
+
+  <!-- Core Client JavaScript Bundle -->
+  <script src="/js/main.js"></script>
+  <%- typeof extraJs !== 'undefined' ? extraJs : '' %>
+</body>
+</html>

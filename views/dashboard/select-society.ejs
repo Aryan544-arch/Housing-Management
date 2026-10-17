@@ -1,0 +1,161 @@
+<%- include('../partials/header', { title: 'Select Housing Society' }) %>
+
+<div style="max-width: 680px; margin: 3rem auto;">
+  <div class="panel">
+    <div style="text-align: center; margin-bottom: 2rem;">
+      <div class="brand-monogram" style="margin: 0 auto 1rem; width: 44px; height: 44px; font-size: 1.35rem;">HM</div>
+      <div class="eyebrow">TENANCY ROUTING CONSOLE</div>
+      <h1 style="font-size: 1.75rem; margin-bottom: 0.5rem;">Select Housing Society</h1>
+      <p style="font-size: 0.88rem; color: var(--text-secondary);">
+        Choose an active housing society to access operational manifests, issue registers, and maintenance workflows.
+      </p>
+    </div>
+
+    <% const actives = typeof activeMemberships !== 'undefined' ? activeMemberships : (typeof memberships !== 'undefined' ? memberships : []); %>
+    <% const pendings = typeof pendingMemberships !== 'undefined' ? pendingMemberships : []; %>
+    <% const inactives = typeof inactiveMemberships !== 'undefined' ? inactiveMemberships : []; %>
+    <% const totals = (typeof allMemberships !== 'undefined' ? allMemberships : []).length; %>
+
+    <% if (totals === 0) { %>
+      <!-- Zero Memberships State: Clean Editorial Empty State without Nested Boxes -->
+      <div style="text-align: center; padding: 1.5rem 0 0.5rem;">
+        <div class="tag-mono" style="color: var(--accent-terracotta); margin-bottom: 0.75rem; display: inline-block;">
+          NO REGISTERED AFFILIATIONS
+        </div>
+        <h2 style="font-size: 1.4rem; margin-bottom: 0.5rem; color: var(--text-primary); font-family: var(--font-heading);">
+          No Society Memberships Found
+        </h2>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; max-width: 480px; margin: 0 auto 1.5rem; line-height: 1.6;">
+          Your user account is verified and active, but you are not currently associated with any residential building manifest.
+        </p>
+
+        <!-- Prominent Next Action Guidance -->
+        <div style="background: var(--bg-surface-elevated); border: 1px solid var(--border-medium); border-left: 4px solid var(--accent-amber); border-radius: var(--radius-sm); padding: 1.25rem 1.4rem; text-align: left; margin: 0 auto 1.5rem; max-width: 520px;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
+            <span style="font-size: 1.1rem; color: var(--accent-amber);">✦</span>
+            <strong style="font-size: 0.85rem; color: var(--accent-amber); text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-mono);">
+              Action Required · Account Activation
+            </strong>
+          </div>
+          <p style="font-size: 0.88rem; color: var(--text-primary); line-height: 1.55; margin: 0 0 0.6rem 0;">
+            Contact your housing society secretary, estate management office, or building committee to link your registered email address to your residential unit.
+          </p>
+          <div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+            Once administration enrolls your flat or confirms tenancy, refresh this page or sign in again to access the resident dashboard.
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 1.25rem;">
+          <button type="button" onclick="window.location.reload()" class="btn btn-primary btn-sm">
+            <span>Refresh Affiliations</span>
+          </button>
+          <button type="button" class="btn btn-outline btn-sm logout-btn" id="zero-affiliations-logout-btn">
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </div>
+
+    <% } else if (actives.length === 0 && (pendings.length > 0 || inactives.length > 0)) { %>
+      <!-- Only Pending or Inactive Memberships -->
+      <div style="padding: 2rem 1.5rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); margin-bottom: 1.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <span class="badge-priority high">VERIFICATION PENDING</span>
+          <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">ACCESS RESTRICTED</span>
+        </div>
+        <h3 style="font-size: 1.25rem; margin-bottom: 0.5rem; color: var(--text-primary);">Approval Awaiting Committee Action</h3>
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+          You have pending or inactive society registrations. Access to society records requires administrative confirmation.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <% pendings.forEach(function(m) { %>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1rem; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+              <div>
+                <strong style="color: var(--text-primary); font-size: 0.92rem;"><%= m.society ? m.society.name : 'Unknown Society' %></strong>
+                <div style="font-size: 0.78rem; color: var(--text-muted);">
+                  Requested Role: <span style="text-transform: uppercase;"><%= m.role %></span>
+                  <%= m.flatNumber ? ' · Unit: ' + m.flatNumber : '' %>
+                </div>
+              </div>
+              <span class="badge-status awaiting_information">Pending Approval</span>
+            </div>
+          <% }); %>
+
+          <% inactives.forEach(function(m) { %>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1rem; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+              <div>
+                <strong style="color: var(--text-primary); font-size: 0.92rem;"><%= m.society ? m.society.name : 'Unknown Society' %></strong>
+                <div style="font-size: 0.78rem; color: var(--text-muted);">Role: <%= m.role %></div>
+              </div>
+              <span class="badge-status cancelled">Inactive</span>
+            </div>
+          <% }); %>
+        </div>
+      </div>
+
+    <% } else { %>
+      <!-- Active Society Options List -->
+      <div style="display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 1.75rem;">
+        <% actives.forEach(function(m) { %>
+          <% if (m.society) { %>
+            <a 
+              href="/societies/<%= m.society._id %>/dashboard" 
+              class="panel" 
+              style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; text-decoration: none; border: 1px solid var(--border-medium); transition: border-color var(--transition-fast), background-color var(--transition-fast);"
+              onmouseover="this.style.borderColor='var(--color-strong-divider)'; this.style.backgroundColor='var(--bg-surface-hover)';"
+              onmouseout="this.style.borderColor='var(--border-medium)'; this.style.backgroundColor='var(--bg-surface)';"
+            >
+              <div>
+                <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem;">
+                  <h3 style="font-size: 1.15rem; color: var(--text-primary); margin: 0;"><%= m.society.name %></h3>
+                  <span class="tag-mono"><%= m.society.code %></span>
+                  <span class="role-pill <%= m.role %>"><%= m.role.toUpperCase() %></span>
+                </div>
+                <div style="font-size: 0.82rem; color: var(--text-muted); font-family: var(--font-body);">
+                  <%= m.flatNumber ? 'Unit: ' + m.flatNumber + ' · ' : '' %>
+                  <%= m.society.address ? m.society.address : 'Residential Campus' %>
+                </div>
+              </div>
+
+              <div>
+                <span class="btn btn-primary btn-sm">Enter Portal &rarr;</span>
+              </div>
+            </a>
+          <% } %>
+        <% }); %>
+      </div>
+
+      <!-- Ancillary Inactive / Pending Section (if any exist alongside active) -->
+      <% if (pendings.length > 0 || inactives.length > 0) { %>
+        <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-subtle);">
+          <div class="eyebrow" style="font-size: 0.68rem; margin-bottom: 0.75rem;">ADDITIONAL MEMBERSHIPS</div>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <% pendings.forEach(function(m) { %>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.65rem 0.85rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: 0.82rem;">
+                <span style="color: var(--text-primary);"><%= m.society ? m.society.name : 'Society' %></span>
+                <span class="badge-status awaiting_information" style="font-size: 0.68rem;">Pending Approval</span>
+              </div>
+            <% }); %>
+            <% inactives.forEach(function(m) { %>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.65rem 0.85rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: 0.82rem;">
+                <span style="color: var(--text-muted);"><%= m.society ? m.society.name : 'Society' %></span>
+                <span class="badge-status cancelled" style="font-size: 0.68rem;">Inactive</span>
+              </div>
+            <% }); %>
+          </div>
+        </div>
+      <% } %>
+    <% } %>
+
+    <% if (totals > 0) { %>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-subtle); font-size: 0.82rem;">
+        <span style="color: var(--text-muted);">Signed in as <strong><%= user ? user.name : 'User' %></strong></span>
+        <button type="button" id="panel-logout-btn" class="btn btn-outline btn-sm logout-btn" style="padding: 0.35rem 0.75rem;">
+          <span>Sign Out</span>
+        </button>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

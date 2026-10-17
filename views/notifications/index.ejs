@@ -1,0 +1,135 @@
+<%- include('../partials/header', { title: 'Notifications Center' }) %>
+
+<div style="max-width: 860px; margin: 1rem auto 3rem;">
+  <!-- Header -->
+  <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border-medium);">
+    <div>
+      <div class="eyebrow">DISPATCH PIPELINE & AUDIT NOTICES</div>
+      <h1 style="margin-bottom: 0.25rem;">Notifications Center</h1>
+      <p style="font-size: 0.88rem; color: var(--text-secondary);">
+        Real-time dispatch log of repair updates, timeline notes, contractor appointments, and administrative verification notices.
+      </p>
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <button type="button" id="refresh-notif-btn" class="btn btn-outline btn-sm" aria-label="Refresh notifications">
+        <span id="refresh-notif-spinner" style="display: none;">↻ </span>
+        <span id="refresh-notif-text">↻ Refresh</span>
+      </button>
+      <button type="button" id="mark-all-read-btn" class="btn btn-outline btn-sm" aria-label="Mark all notifications as read">
+        <span>✓ Mark All as Read</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary Metrics Grid -->
+  <div class="metrics-grid" style="margin-bottom: 1.5rem;">
+    <div class="metric-card">
+      <div class="metric-label">Total Pipeline Dispatches</div>
+      <div class="metric-value" id="metric-total-notifications"><%= notifications ? notifications.length : 0 %></div>
+      <div class="metric-trend">Lifetime society notices</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Unread Notices</div>
+      <div class="metric-value" id="metric-unread-notifications" style="color: var(--accent-amber);"><%= typeof unreadCount !== 'undefined' ? unreadCount : 0 %></div>
+      <div class="metric-trend">Requires resident attention</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Reviewed & Archived</div>
+      <div class="metric-value" id="metric-read-notifications"><%= (notifications ? notifications.length : 0) - (typeof unreadCount !== 'undefined' ? unreadCount : 0) %></div>
+      <div class="metric-trend">Acknowledged dispatches</div>
+    </div>
+  </div>
+
+  <!-- Error / Alert Banner -->
+  <div id="notifications-alert" class="panel" role="alert" style="display: none; background: rgba(184, 80, 66, 0.08); border-color: var(--accent-terracotta); margin-bottom: 1.25rem; padding: 0.85rem 1.25rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+      <div style="display: flex; align-items: center; gap: 0.5rem; color: var(--accent-terracotta); font-size: 0.88rem;">
+        <span style="font-weight: 700;">⚠</span>
+        <span id="notifications-alert-text">An error occurred while synchronizing notifications.</span>
+      </div>
+      <button type="button" id="notifications-alert-retry" class="btn btn-outline btn-sm" style="font-size: 0.75rem;">Retry</button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div id="notifications-loading" class="panel" role="status" style="display: none; text-align: center; padding: 2rem; margin-bottom: 1.25rem;">
+    <div style="font-size: 1.5rem; margin-bottom: 0.5rem; animation: spin 1s linear infinite; display: inline-block;">↻</div>
+    <p style="font-size: 0.88rem; color: var(--text-secondary); margin: 0;">Synchronizing notification dispatch log...</p>
+  </div>
+
+  <div class="panel">
+    <!-- Tabs: All vs Unread -->
+    <div class="tab-group" role="tablist" aria-label="Notification Filters">
+      <button type="button" class="tab-btn active" id="tab-notif-all" role="tab" aria-selected="true">
+        All Notifications (<span id="tab-all-count"><%= notifications ? notifications.length : 0 %></span>)
+      </button>
+      <button type="button" class="tab-btn" id="tab-notif-unread" role="tab" aria-selected="false">
+        Unread (<span id="tab-unread-count"><%= typeof unreadCount !== 'undefined' ? unreadCount : 0 %></span>)
+      </button>
+    </div>
+
+    <!-- Empty State: No notifications at all -->
+    <div id="notifications-empty-all" style="<%= (!notifications || notifications.length === 0) ? 'display: block;' : 'display: none;' %> text-align: center; padding: 3rem 1.5rem; color: var(--text-muted);">
+      <div style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.6;">🔔</div>
+      <p style="font-size: 0.9rem; margin-bottom: 0.25rem; color: var(--text-primary); font-weight: 600;">No Notifications</p>
+      <p style="font-size: 0.82rem; margin: 0;">You are fully caught up with society issue dispatches and updates.</p>
+    </div>
+
+    <!-- Empty State: No unread notifications (shown when filtering by Unread tab) -->
+    <div id="notifications-empty-unread" style="display: none; text-align: center; padding: 3rem 1.5rem; color: var(--text-muted);">
+      <div style="font-size: 2rem; margin-bottom: 0.5rem; color: var(--accent-sage);">✓</div>
+      <p style="font-size: 0.9rem; margin-bottom: 0.25rem; color: var(--text-primary); font-weight: 600;">No Unread Notifications</p>
+      <p style="font-size: 0.82rem; margin: 0;">You have reviewed all incoming dispatch notices for this society.</p>
+    </div>
+
+    <!-- Notifications List -->
+    <div id="notifications-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+      <% if (notifications && notifications.length > 0) { %>
+        <% notifications.forEach(function(n) { %>
+          <div 
+            class="notification-item" 
+            data-id="<%= n._id %>" 
+            data-read="<%= n.read %>"
+            style="background: var(--bg-surface-elevated); border: 1px solid <%= n.read ? 'var(--border-subtle)' : 'var(--accent-amber)' %>; border-radius: var(--radius-sm); padding: 1rem 1.25rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; transition: all var(--transition-fast);"
+          >
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; flex-wrap: wrap;">
+                <% if (!n.read) { %>
+                  <span class="unread-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent-amber); display: inline-block;" aria-label="Unread"></span>
+                <% } %>
+                <span class="tag-mono" style="text-transform: uppercase;"><%= (n.type || 'alert').replace(/_/g, ' ') %></span>
+                <span style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">
+                  <%= new Date(n.createdAt).toLocaleString() %>
+                </span>
+              </div>
+
+              <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 0.25rem;">
+                <%= n.title %>
+              </div>
+
+              <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 0.5rem 0;">
+                <%= n.message %>
+              </p>
+
+              <% if (n.issue) { %>
+                <a href="/societies/<%= activeSociety._id %>/issues/<%= n.issue._id || n.issue %>" style="font-size: 0.8rem; font-weight: 600; color: var(--accent-amber);" aria-label="Inspect issue related to <%= n.title %>">
+                  Inspect Related Issue &rarr;
+                </a>
+              <% } %>
+            </div>
+
+            <% if (!n.read) { %>
+              <button type="button" class="btn btn-outline btn-sm mark-read-single-btn" data-id="<%= n._id %>" style="font-size: 0.75rem; white-space: nowrap;" aria-label="Mark notification as read">
+                Mark Read
+              </button>
+            <% } %>
+          </div>
+        <% }); %>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<script src="/js/notifications.js"></script>
+<%- include('../partials/footer') %>

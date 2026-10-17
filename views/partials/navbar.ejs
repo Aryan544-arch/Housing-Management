@@ -1,0 +1,93 @@
+<header class="app-header">
+  <div class="header-inner">
+    <!-- Brand / Architectural Monogram -->
+    <a href="<%= (typeof activeSociety !== 'undefined' && activeSociety && activeSociety._id) ? '/societies/' + activeSociety._id + '/dashboard' : '/dashboard' %>" class="brand-wrapper">
+      <div class="brand-monogram">HM</div>
+      <div class="brand-text-group">
+        <span class="brand-title">Housing Portal</span>
+        <span class="brand-subtitle">ARCHITECTURAL OPERATIONS</span>
+      </div>
+    </a>
+
+    <% if (typeof user !== 'undefined' && user) { %>
+      <!-- Navigation Menu for Authenticated Users -->
+      <nav class="header-nav">
+        <% const currentSocId = (typeof activeSociety !== 'undefined' && activeSociety && activeSociety._id) ? activeSociety._id.toString() : ''; %>
+        <% const isSocAdmin = (typeof currentRole !== 'undefined' && currentRole === 'admin') || (typeof activeSocietyRole !== 'undefined' && activeSocietyRole === 'admin'); %>
+        
+        <a href="<%= currentSocId ? '/societies/' + currentSocId + '/dashboard' : '/dashboard' %>" class="nav-link <%= typeof activeNav !== 'undefined' && activeNav === 'dashboard' ? 'active' : '' %>">
+          <span>Overview</span>
+        </a>
+
+        <% if (currentSocId) { %>
+          <a href="/societies/<%= currentSocId %>/issues/new" class="nav-link <%= typeof activeNav !== 'undefined' && activeNav === 'new-issue' ? 'active' : '' %>">
+            <span>+ Report Issue</span>
+          </a>
+
+          <% if (isSocAdmin) { %>
+            <a href="/societies/<%= currentSocId %>/admin/providers" class="nav-link <%= typeof activeNav !== 'undefined' && activeNav === 'providers' ? 'active' : '' %>">
+              <span>Providers</span>
+            </a>
+          <% } %>
+
+          <a href="/societies/<%= currentSocId %>/notifications" class="nav-link <%= typeof activeNav !== 'undefined' && activeNav === 'notifications' ? 'active' : '' %>" style="position: relative;" aria-label="Notifications Center">
+            <span>Notifications</span>
+            <span id="nav-notification-badge" class="badge-status in_progress" style="<%= (typeof unreadCount !== 'undefined' && unreadCount > 0) ? 'display: inline-flex;' : 'display: none;' %> padding: 0.1rem 0.4rem; font-size: 0.65rem; border-radius: 9999px;"><%= (typeof unreadCount !== 'undefined' && unreadCount > 99) ? '99+' : (typeof unreadCount !== 'undefined' ? unreadCount : '0') %></span>
+          </a>
+        <% } %>
+      </nav>
+
+      <!-- Society Switcher, Profile & Actions -->
+      <div class="header-actions">
+        <% if (typeof memberships !== 'undefined' && memberships && memberships.length > 0) { %>
+          <div class="society-selector-wrap">
+            <select id="nav-society-select" class="society-select-btn" title="Switch active housing society">
+              <% if (!currentSocId) { %>
+                <option value="" disabled selected>Switch Society...</option>
+              <% } %>
+              <% memberships.forEach(function(m) { %>
+                <% if (m.society) { %>
+                  <option value="<%= m.society._id %>" <%= currentSocId === m.society._id.toString() ? 'selected' : '' %>>
+                    <%= m.society.name %> (<%= m.role.toUpperCase() %>)
+                  </option>
+                <% } %>
+              <% }); %>
+            </select>
+          </div>
+        <% } %>
+
+        <div class="user-badge">
+          <span style="font-weight: 600; font-size: 0.82rem;"><%= user.name %></span>
+          <% if (isSocAdmin) { %>
+            <span class="role-pill admin">ADMIN</span>
+          <% } else if (typeof currentRole !== 'undefined' && currentRole === 'resident') { %>
+            <span class="role-pill resident">
+              RESIDENT<%= (typeof flatNumber !== 'undefined' && flatNumber) ? ' · ' + flatNumber : '' %>
+            </span>
+          <% } else { %>
+            <span class="role-pill" style="background: var(--bg-surface-elevated); color: var(--text-muted); border: 1px solid var(--border-medium);">
+              USER
+            </span>
+          <% } %>
+        </div>
+
+        <button type="button" id="theme-toggle-btn" class="btn btn-secondary btn-sm" aria-label="Toggle theme">
+          ☀
+        </button>
+
+        <button type="button" id="nav-logout-btn" class="btn btn-outline btn-sm">
+          Log Out
+        </button>
+      </div>
+    <% } else { %>
+      <!-- Unauthenticated Navigation -->
+      <div class="header-actions">
+        <button type="button" id="theme-toggle-btn" class="btn btn-secondary btn-sm" aria-label="Toggle theme">
+          ☀
+        </button>
+        <a href="/login" class="btn btn-outline btn-sm">Log In</a>
+        <a href="/register" class="btn btn-primary btn-sm">Register</a>
+      </div>
+    <% } %>
+  </div>
+</header>

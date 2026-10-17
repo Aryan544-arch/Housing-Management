@@ -1,0 +1,742 @@
+<% const isAdmin = (typeof currentRole !== 'undefined' && currentRole === 'admin') || (typeof activeSocietyRole !== 'undefined' && activeSocietyRole === 'admin'); %>
+<% const isSubmitter = (typeof user !== 'undefined' && user && issue.submittingResident && ((issue.submittingResident._id && issue.submittingResident._id.toString() === user._id.toString()) || issue.submittingResident.toString() === user._id.toString())); %>
+
+<%- include('../partials/header', { title: 'Issue #' + issue._id.toString().slice(-6).toUpperCase() + ' | ' + issue.title }) %>
+
+<div style="margin-bottom: 3rem;">
+  <!-- Breadcrumb -->
+  <div style="margin-bottom: 1.25rem;">
+    <a href="/societies/<%= activeSociety._id %>/dashboard" style="font-size: 0.85rem; color: var(--text-muted);">&larr; Return to Dashboard</a>
+  </div>
+
+  <!-- Hero Status Header -->
+  <div class="panel" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem;">
+      <div style="flex: 1; min-width: 280px;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+          <span class="tag-mono">#<%= issue._id.toString().slice(-8).toUpperCase() %></span>
+          <span class="badge-status <%= issue.status %>"><%= issue.status.replace(/_/g, ' ') %></span>
+          <span class="badge-priority <%= issue.priority %>"><%= issue.priority %> PRIORITY</span>
+          <span class="tag-mono" style="text-transform: capitalize;"><%= issue.category %></span>
+        </div>
+
+        <h1 style="font-size: 1.85rem; margin-bottom: 0.5rem;"><%= issue.title %></h1>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.82rem; color: var(--text-muted);">
+          <span>Location: 
+            <strong style="color: var(--text-primary);">
+              <% if (issue.location && issue.location.type === 'unit') { %>
+                [UNIT] <%= issue.location.blockOrWing %> - <%= issue.location.flatOrUnit %>
+              <% } else if (issue.location && issue.location.type === 'common_area') { %>
+                [COMMON AREA] <%= issue.location.areaDescription %>
+              <% } %>
+            </strong>
+          </span>
+          <span>·</span>
+          <span>Logged by: 
+            <strong style="color: var(--text-primary);">
+              <%= (issue.submittingResident && issue.submittingResident.name) ? issue.submittingResident.name : 'Resident Member' %>
+            </strong>
+            <% if (isAdmin || isSubmitter) { %>
+              <%= (issue.submittingResident && issue.submittingResident.phone) ? ' · ' + issue.submittingResident.phone : '' %>
+              <%= (issue.submittingResident && issue.submittingResident.email) ? ' · ' + issue.submittingResident.email : '' %>
+            <% } %>
+          </span>
+          <span>·</span>
+          <span>Logged: <strong style="color: var(--text-primary);"><%= new Date(issue.createdAt).toLocaleString() %></strong></span>
+          <span>·</span>
+          <span>Updated: <strong style="color: var(--text-primary);"><%= new Date(issue.updatedAt || issue.createdAt).toLocaleString() %></strong></span>
+          <span>·</span>
+          <span class="tag-mono" style="font-size: 0.72rem; color: var(--text-muted);">Ref: <%= issue._id %></span>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons on Header -->
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button type="button" id="open-evidence-upload-btn" class="btn btn-outline btn-sm">
+          <span>+ Add Evidence</span>
+        </button>
+
+        <% if (isAdmin) { %>
+          <button type="button" id="open-triage-modal-btn" class="btn btn-secondary btn-sm">
+            <span>Triage & Edit Metadata</span>
+          </button>
+          <button type="button" id="open-status-modal-btn" class="btn btn-primary btn-sm">
+            <span>Update Status / Action</span>
+          </button>
+        <% } else if (isSubmitter && ['submitted', 'under_review', 'awaiting_information'].includes(issue.status)) { %>
+          <% if (issue.status === 'awaiting_information') { %>
+            <button type="button" id="open-provide-info-btn" class="btn btn-primary btn-sm">
+              <span>Provide Requested Info</span>
+            </button>
+          <% } %>
+          <button type="button" id="open-cancel-modal-btn" class="btn btn-danger btn-sm">
+            <span>Cancel Issue</span>
+          </button>
+        <% } else if ((isAdmin || isSubmitter) && issue.status === 'verified_closed') { %>
+          <button type="button" id="open-reopen-modal-btn" class="btn btn-secondary btn-sm">
+            <span>Reopen Issue</span>
+          </button>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Two-Column Editorial Layout -->
+  <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; align-items: start;">
+    
+    <!-- LEFT COLUMN: Main Issue Body, AI Advisory, Evidence Gallery, Timeline, Notes -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      
+      <!-- 1. Description Card -->
+      <div class="panel">
+        <h3 class="panel-title" style="margin-bottom: 0.75rem;">Issue Details & Observation</h3>
+        <p style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.65; color: var(--text-primary);"><%= issue.description %></p>
+
+        <% if (issue.resolutionSummary) { %>
+          <div style="margin-top: 1.25rem; padding: 0.9rem 1.1rem; background: var(--accent-sage-subtle); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: var(--radius-sm);">
+            <div style="font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700; color: var(--accent-sage); margin-bottom: 0.25rem;">RESOLUTION VERIFICATION SUMMARY</div>
+            <p style="font-size: 0.88rem; color: var(--text-primary); margin: 0;"><%= issue.resolutionSummary %></p>
+          </div>
+        <% } %>
+
+        <% if (issue.cancellationReason) { %>
+          <div style="margin-top: 1.25rem; padding: 0.9rem 1.1rem; background: var(--accent-crimson-subtle); border: 1px solid rgba(248, 113, 113, 0.3); border-radius: var(--radius-sm);">
+            <div style="font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700; color: var(--accent-crimson); margin-bottom: 0.25rem;">CANCELLATION REASON</div>
+            <p style="font-size: 0.88rem; color: var(--text-primary); margin: 0;"><%= issue.cancellationReason %></p>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- 2. AI Advisory Triage Card -->
+      <div class="advisory-box" id="ai-advisory-container">
+        <div class="advisory-header">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.2rem;">✨</span>
+            <span class="advisory-badge">AI Triage Advisory Assistant</span>
+          </div>
+
+          <button type="button" id="trigger-ai-advisory-btn" class="btn btn-outline btn-sm" style="font-size: 0.75rem;">
+            <span>Run AI Triage Analysis</span>
+          </button>
+        </div>
+
+        <div id="ai-advisory-output">
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
+            Click <strong>"Run AI Triage Analysis"</strong> to generate preliminary category verification, priority assessment, and clarification inquiries using the configured Gemma advisory pipeline.
+          </p>
+        </div>
+
+        <div class="advisory-disclaimer">
+          Advisory suggestions are strictly recommendations for preliminary triage assistance. They do not alter official issue manifests, change statuses, or replace manual management verification.
+        </div>
+      </div>
+
+      <!-- 3. Evidence Gallery -->
+      <div class="panel">
+        <div class="panel-header">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <h3 class="panel-title">Attached Inspection Evidence</h3>
+            <% const allEvidence = (issue.evidence || []).concat((issue.completionDetails && issue.completionDetails.evidence) || []); %>
+            <span class="tag-mono"><%= allEvidence.length %> FILES</span>
+          </div>
+
+          <button type="button" id="add-evidence-sub-btn" class="btn btn-outline btn-sm">+ Upload Attachment</button>
+        </div>
+
+        <% if (allEvidence.length === 0) { %>
+          <div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.85rem;">
+            No photographic or document evidence has been attached to this issue manifest.
+          </div>
+        <% } else { %>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;">
+            <% allEvidence.forEach(function(item) { %>
+              <div style="background: var(--bg-surface-elevated); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 0.85rem; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+                    <span class="tag-mono"><%= (item.mimeType && item.mimeType.includes('pdf')) ? 'PDF' : 'IMAGE' %></span>
+                    <% if (item.isInternal) { %>
+                      <span class="tag-mono" style="color: var(--accent-purple);">INTERNAL</span>
+                    <% } %>
+                    <span style="font-size: 0.72rem; color: var(--text-muted);"><%= (item.sizeBytes / 1024).toFixed(0) %> KB</span>
+                  </div>
+
+                  <% if (item.mimeType && item.mimeType.startsWith('image/')) { %>
+                    <a href="/api/societies/<%= activeSociety._id %>/issues/<%= issue._id %>/evidence/<%= item._id %>" target="_blank" style="display: block; margin-bottom: 0.6rem; border-radius: var(--radius-xs); overflow: hidden; background: var(--bg-canvas); text-align: center;">
+                      <img src="/api/societies/<%= activeSociety._id %>/issues/<%= issue._id %>/evidence/<%= item._id %>" alt="<%= item.caption || item.originalFilename %>" style="max-height: 120px; width: 100%; object-fit: cover; display: block;" loading="lazy">
+                    </a>
+                  <% } else { %>
+                    <div style="padding: 1.25rem 0.5rem; text-align: center; background: var(--bg-canvas); border-radius: var(--radius-xs); margin-bottom: 0.6rem; font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-terracotta);">
+                      DOCUMENT ATTACHMENT
+                    </div>
+                  <% } %>
+
+                  <div style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0.25rem; word-break: break-all;">
+                    <%= item.originalFilename || 'Evidence File' %>
+                  </div>
+
+                  <% if (item.caption) { %>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem; font-style: italic;">
+                      "<%= item.caption %>"
+                    </div>
+                  <% } %>
+                </div>
+
+                <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted);">
+                    <%= new Date(item.uploadedAt).toLocaleDateString() %>
+                  </span>
+                  <a href="/api/societies/<%= activeSociety._id %>/issues/<%= issue._id %>/evidence/<%= item._id %>" target="_blank" class="btn btn-outline btn-sm" style="font-size: 0.75rem; padding: 0.2rem 0.6rem;">
+                    Open &darr;
+                  </a>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- 4. Progress & Audit Timeline -->
+      <div class="panel">
+        <h3 class="panel-title">AUDIT TRAIL & PROGRESS TIMELINE</h3>
+
+        <div class="timeline">
+          <% if (issue.history && issue.history.length > 0) { %>
+            <% issue.history.forEach(function(evt) { %>
+              <div class="timeline-item">
+                <div class="timeline-marker <%= evt.isInternal ? 'internal' : '' %>"></div>
+                <div class="timeline-content">
+                  <div class="timeline-header">
+                    <div>
+                      <span class="timeline-actor">
+                        <%= (evt.changedBy && evt.changedBy.name) ? evt.changedBy.name : 'System / Actor' %>
+                      </span>
+                      <span class="tag-mono" style="margin-left: 0.4rem; text-transform: uppercase;">
+                        <%= evt.action.replace(/_/g, ' ') %>
+                      </span>
+                      <% if (evt.isInternal) { %>
+                        <span class="tag-mono" style="color: var(--accent-purple);">INTERNAL NOTE</span>
+                      <% } %>
+                    </div>
+                    <span class="timeline-date"><%= new Date(evt.changedAt).toLocaleString() %></span>
+                  </div>
+
+                  <% if (evt.fromStatus && evt.toStatus) { %>
+                    <div style="font-size: 0.8rem; margin-bottom: 0.35rem; color: var(--text-muted);">
+                      Transition: <span class="tag-mono"><%= evt.fromStatus %></span> &rarr; <span class="tag-mono" style="color: var(--accent-amber);"><%= evt.toStatus %></span>
+                    </div>
+                  <% } %>
+
+                  <% if (evt.note) { %>
+                    <div class="timeline-note"><%= evt.note %></div>
+                  <% } %>
+                </div>
+              </div>
+            <% }); %>
+          <% } else { %>
+            <div style="color: var(--text-muted); font-size: 0.85rem;">No timeline events recorded.</div>
+          <% } %>
+        </div>
+      </div>
+
+      <!-- 5. Add Timeline Note Form -->
+      <div class="panel">
+        <h3 class="panel-title" style="margin-bottom: 0.75rem;">Add Comment or Note</h3>
+        <form id="add-note-form" novalidate>
+          <div class="form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <label for="note-text" class="form-label" style="margin: 0;">Comment or Status Update</label>
+              <span id="note-char-count" style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">0 / 1000</span>
+            </div>
+            <textarea id="note-text" name="note" class="form-control" rows="3" placeholder="Write a status update, resident comment, or repair clarification..." required maxlength="1000"></textarea>
+            <div id="note-error" class="form-error">Note must be between 2 and 1000 characters.</div>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+            <% if (isAdmin) { %>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer;">
+                <input type="checkbox" id="note-is-internal" name="isInternal" value="true">
+                <span>Mark as internal administrative note (hidden from residents)</span>
+              </label>
+            <% } else { %>
+              <div></div>
+            <% } %>
+
+            <button type="submit" id="submit-note-btn" class="btn btn-primary btn-sm">
+              <span>Post Comment &rarr;</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Workflow Controls, Costs, Contractor Suggestions -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      
+      <!-- Operations Overview Card -->
+      <div class="panel">
+        <h3 class="panel-title" style="margin-bottom: 1rem;">Workflow State</h3>
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.85rem;">
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Current State:</span>
+            <span class="badge-status <%= issue.status %>"><%= issue.status.replace(/_/g, ' ') %></span>
+          </div>
+
+          <% const progressEvents = (issue.history || []).filter(e => e.action === 'progress_recorded'); %>
+          <% if (progressEvents.length > 0) { %>
+            <% const latestProg = progressEvents[progressEvents.length - 1]; %>
+            <% const pctMatch = latestProg.note ? latestProg.note.match(/\[(\d+)%\]/) : null; %>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: var(--text-muted);">Latest Progress:</span>
+              <span class="tag-mono" style="color: var(--accent-amber); font-weight: 700;"><%= pctMatch ? pctMatch[1] + '%' : 'Logged' %></span>
+            </div>
+          <% } %>
+
+          <% if (issue.scheduledDate) { %>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-muted);">Scheduled Date:</span>
+              <strong style="color: var(--accent-amber);"><%= new Date(issue.scheduledDate).toLocaleDateString() %></strong>
+            </div>
+          <% } %>
+
+          <% const hasAssignedContractor = issue.externalProviderDetails && (issue.externalProviderDetails.companyOrName || issue.externalProviderDetails.contactPhone); %>
+          <% if (hasAssignedContractor) { %>
+            <div style="border-top: 1px solid var(--border-subtle); padding-top: 0.75rem; margin-top: 0.25rem;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+                <div>
+                  <div style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.35rem;">ASSIGNED CONTRACTOR:</div>
+                  <div id="assigned-contractor-name" style="font-weight: 600; color: var(--text-primary);"><%= issue.externalProviderDetails.companyOrName || 'Contractor' %></div>
+                  <div style="font-size: 0.8rem; color: var(--text-secondary);">Phone: <%= issue.externalProviderDetails.contactPhone || 'N/A' %></div>
+                  <div style="font-size: 0.8rem; color: var(--text-secondary);">Trade: <%= issue.externalProviderDetails.trade || 'General' %></div>
+                </div>
+                <% if (isAdmin) { %>
+                  <button type="button" id="unassign-contractor-btn" class="btn btn-outline btn-sm" style="font-size: 0.72rem; color: var(--accent-crimson); padding: 0.2rem 0.5rem;" title="Remove assigned contractor">
+                    ✕ Remove
+                  </button>
+                <% } %>
+              </div>
+            </div>
+          <% } else if (isAdmin) { %>
+            <div style="border-top: 1px solid var(--border-subtle); padding-top: 0.75rem; margin-top: 0.25rem;">
+              <div style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.25rem;">ASSIGNED CONTRACTOR:</div>
+              <div style="font-size: 0.82rem; color: var(--text-muted); font-style: italic;">No contractor assigned yet.</div>
+            </div>
+          <% } %>
+        </div>
+
+        <% if (isAdmin) { %>
+          <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 0.5rem;">
+            <button type="button" id="record-progress-btn" class="btn btn-secondary btn-sm" style="width: 100%;">
+              <span>Record Repair Progress (%)</span>
+            </button>
+            <button type="button" id="open-providers-modal-btn" class="btn btn-outline btn-sm" style="width: 100%;">
+              <span><%= hasAssignedContractor ? 'Reassign / Suggest Contractor' : 'Inspect Contractor Suggestions' %></span>
+            </button>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- Repair Cost Breakdown (Admin Only - Redacted from Residents) -->
+      <% if (isAdmin) { %>
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">Repair Costs</h3>
+            <button type="button" id="edit-costs-btn" class="btn btn-outline btn-sm" style="font-size: 0.75rem;">Edit Costs</button>
+          </div>
+
+          <% const costs = issue.costs || { materialCost: 0, laborCost: 0, otherCost: 0, totalCost: 0, currency: 'INR' }; %>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem;">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-muted);">Material Cost:</span>
+              <span>₹ <%= (costs.materialCost || 0).toLocaleString() %></span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-muted);">Labor Cost:</span>
+              <span>₹ <%= (costs.laborCost || 0).toLocaleString() %></span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-muted);">Other Cost:</span>
+              <span>₹ <%= (costs.otherCost || 0).toLocaleString() %></span>
+            </div>
+            <div style="border-top: 1px solid var(--border-strong); padding-top: 0.5rem; display: flex; justify-content: space-between; font-weight: 700; font-size: 1rem; color: var(--accent-amber);">
+              <span>Total Cost:</span>
+              <span>₹ <%= (costs.totalCost || 0).toLocaleString() %> <%= costs.currency || 'INR' %></span>
+            </div>
+          </div>
+        </div>
+      <% } %>
+
+      <!-- Work Completion Details (If submitted) -->
+      <% if (issue.completionDetails && (issue.completionDetails.workSummary || (issue.completionDetails.evidence && issue.completionDetails.evidence.length > 0))) { %>
+        <div class="panel">
+          <h3 class="panel-title" style="margin-bottom: 0.75rem;">Completion Report</h3>
+          <% if (issue.completionDetails.workSummary) { %>
+            <p style="font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0.75rem;"><%= issue.completionDetails.workSummary %></p>
+          <% } %>
+          <% if (issue.completionDetails.completedBy) { %>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">Signed off by: <%= issue.completionDetails.completedBy %></div>
+          <% } %>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     MODALS SECTION
+     ========================================================================== -->
+
+<!-- Admin Triage & Metadata Reclassification Modal -->
+<% if (isAdmin) { %>
+  <div class="modal-overlay" id="triage-modal" role="dialog" aria-modal="true" aria-labelledby="triage-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="triage-modal-title">Triage & Reclassify Issue</h3>
+        <button type="button" class="btn btn-outline btn-sm" data-close-modal aria-label="Close dialog">&times;</button>
+      </div>
+      <form id="triage-issue-form">
+        <div class="modal-body">
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Calibrate priority classification and trade category based on physical inspection, resident notes, or AI advisory signals.
+          </p>
+
+          <div class="form-group">
+            <label for="triage-priority" class="form-label">Operational Priority <span class="required">*</span></label>
+            <select id="triage-priority" name="priority" class="form-control" required>
+              <option value="urgent" <%= issue.priority === 'urgent' ? 'selected' : '' %>>Urgent (Immediate physical intervention)</option>
+              <option value="high" <%= issue.priority === 'high' ? 'selected' : '' %>>High (Significant impairment)</option>
+              <option value="normal" <%= issue.priority === 'normal' ? 'selected' : '' %>>Normal (Standard maintenance routine)</option>
+              <option value="low" <%= issue.priority === 'low' ? 'selected' : '' %>>Low (Cosmetic / Deferred scheduling)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="triage-category" class="form-label">Trade / Domain Category <span class="required">*</span></label>
+            <select id="triage-category" name="category" class="form-control" required>
+              <option value="plumbing" <%= issue.category === 'plumbing' ? 'selected' : '' %>>Plumbing</option>
+              <option value="electrical" <%= issue.category === 'electrical' ? 'selected' : '' %>>Electrical</option>
+              <option value="carpentry" <%= issue.category === 'carpentry' ? 'selected' : '' %>>Carpentry</option>
+              <option value="security" <%= issue.category === 'security' ? 'selected' : '' %>>Security</option>
+              <option value="housekeeping" <%= issue.category === 'housekeeping' ? 'selected' : '' %>>Housekeeping</option>
+              <option value="elevator" <%= issue.category === 'elevator' ? 'selected' : '' %>>Elevator</option>
+              <option value="common_area" <%= issue.category === 'common_area' ? 'selected' : '' %>>Common Area</option>
+              <option value="structural" <%= issue.category === 'structural' ? 'selected' : '' %>>Structural</option>
+              <option value="other" <%= issue.category === 'other' ? 'selected' : '' %>>Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+          <button type="submit" id="submit-triage-btn" class="btn btn-primary">Save Triage Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+<% } %>
+
+<!-- Status Transition Modal (Admin Only) -->
+<% if (isAdmin) { %>
+  <div class="modal-overlay" id="status-modal" role="dialog" aria-modal="true" aria-labelledby="status-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="status-modal-title">Update Issue Workflow Status</h3>
+        <button type="button" class="btn btn-outline btn-sm" data-close-modal aria-label="Close dialog">&times;</button>
+      </div>
+      <form id="update-status-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="toStatus" class="form-label">Next Workflow State <span class="required">*</span></label>
+            <select id="toStatus" name="toStatus" class="form-control" required>
+              <option value="">Select Target Transition...</option>
+              <% if (issue.status === 'submitted') { %>
+                <option value="under_review">under_review (Begin administrative review)</option>
+                <option value="cancelled">cancelled (Reject/Cancel issue)</option>
+              <% } else if (issue.status === 'under_review') { %>
+                <option value="awaiting_information">awaiting_information (Request resident details)</option>
+                <option value="provider_contact_pending">provider_contact_pending (Contact contractor)</option>
+                <option value="scheduled">scheduled (Set repair appointment)</option>
+                <option value="in_progress">in_progress (Commence repair)</option>
+                <option value="cancelled">cancelled (Cancel issue)</option>
+              <% } else if (issue.status === 'awaiting_information') { %>
+                <option value="under_review">under_review (Resume review)</option>
+                <option value="cancelled">cancelled (Cancel issue)</option>
+              <% } else if (issue.status === 'provider_contact_pending') { %>
+                <option value="scheduled">scheduled (Set repair date)</option>
+                <option value="in_progress">in_progress (Commence repair)</option>
+                <option value="cancelled">cancelled (Cancel issue)</option>
+              <% } else if (issue.status === 'scheduled') { %>
+                <option value="in_progress">in_progress (Repair started)</option>
+                <option value="scheduled">scheduled (Reschedule appointment)</option>
+                <option value="cancelled">cancelled (Cancel issue)</option>
+              <% } else if (issue.status === 'in_progress') { %>
+                <option value="completion_submitted">completion_submitted (Submit repair completion)</option>
+                <option value="awaiting_information">awaiting_information (Awaiting info)</option>
+              <% } else if (issue.status === 'completion_submitted') { %>
+                <option value="verified_closed">verified_closed (Sign off & close repair)</option>
+                <option value="verification_rejected">verification_rejected (Reject & send back)</option>
+              <% } else if (issue.status === 'verification_rejected') { %>
+                <option value="in_progress">in_progress (Resume repair)</option>
+                <option value="provider_contact_pending">provider_contact_pending (Contact provider)</option>
+              <% } else if (issue.status === 'verified_closed') { %>
+                <option value="reopened">reopened (Reopen issue for further work)</option>
+              <% } else if (issue.status === 'reopened') { %>
+                <option value="under_review">under_review (Under review)</option>
+                <option value="in_progress">in_progress (In progress)</option>
+                <option value="scheduled">scheduled (Scheduled)</option>
+              <% } %>
+            </select>
+          </div>
+
+          <!-- Dynamic Field: Scheduled Date -->
+          <div class="form-group" id="status-scheduled-field" style="display: none;">
+            <label for="scheduledDate" class="form-label">Scheduled Repair Date <span class="required">*</span></label>
+            <input type="datetime-local" id="scheduledDate" name="scheduledDate" class="form-control">
+          </div>
+
+          <!-- Dynamic Field: Completion Details -->
+          <div class="form-group" id="status-completion-field" style="display: none;">
+            <label for="status-completion-summary" class="form-label">Completion Work Summary</label>
+            <textarea id="status-completion-summary" class="form-control" rows="2" placeholder="Summary of physical work completed by technician or contractor..."></textarea>
+          </div>
+
+          <!-- Dynamic Field: Note / Reason / Resolution -->
+          <div class="form-group">
+            <label for="status-note" class="form-label" id="status-note-label">Workflow Transition Note</label>
+            <div id="status-note-warning" style="display: none; font-size: 0.78rem; color: var(--accent-amber); margin-bottom: 0.35rem;">
+              A descriptive note is required for this transition.
+            </div>
+            <textarea id="status-note" name="note" class="form-control" rows="3" placeholder="Reason for transition, instructions for resident, or resolution summary..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+          <button type="submit" id="submit-status-btn" class="btn btn-primary">Apply Transition</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Record Progress Modal -->
+  <div class="modal-overlay" id="progress-modal" role="dialog" aria-modal="true" aria-labelledby="progress-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="progress-modal-title">Record Repair Progress</h3>
+        <button type="button" class="btn btn-outline btn-sm" data-close-modal aria-label="Close dialog">&times;</button>
+      </div>
+      <form id="record-progress-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+              <label for="progress-pct" class="form-label" style="margin: 0;">Progress Percentage</label>
+              <span id="progress-pct-val" style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-amber);">50%</span>
+            </div>
+            <input type="range" id="progress-pct" name="progressPercentage" min="0" max="100" step="5" value="50" class="form-control" style="cursor: pointer;">
+          </div>
+
+          <div class="form-group">
+            <label for="progress-note-text" class="form-label">Work Completed Note <span class="required">*</span></label>
+            <textarea id="progress-note-text" name="note" class="form-control" rows="3" placeholder="Describe physical work accomplished today, contractor attendance, or next milestones..." required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer;">
+              <input type="checkbox" id="progress-is-internal" name="isInternal" value="true">
+              <span>Internal progress log (do not notify resident)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+          <button type="submit" id="submit-progress-btn" class="btn btn-primary">Save Progress Log</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit Costs Modal -->
+  <div class="modal-overlay" id="costs-modal" role="dialog" aria-modal="true" aria-labelledby="costs-modal-title">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="costs-modal-title">Record & Update Repair Costs</h3>
+        <button type="button" class="btn btn-outline btn-sm" data-close-modal aria-label="Close dialog">&times;</button>
+      </div>
+      <form id="edit-costs-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="cost-material" class="form-label">Material Cost (INR)</label>
+            <input type="number" id="cost-material" min="0" step="0.01" class="form-control" value="<%= (issue.costs && issue.costs.materialCost) || 0 %>">
+          </div>
+
+          <div class="form-group">
+            <label for="cost-labor" class="form-label">Labor Cost (INR)</label>
+            <input type="number" id="cost-labor" min="0" step="0.01" class="form-control" value="<%= (issue.costs && issue.costs.laborCost) || 0 %>">
+          </div>
+
+          <div class="form-group">
+            <label for="cost-other" class="form-label">Other / Equipment Cost (INR)</label>
+            <input type="number" id="cost-other" min="0" step="0.01" class="form-control" value="<%= (issue.costs && issue.costs.otherCost) || 0 %>">
+          </div>
+
+          <div style="padding: 0.85rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); display: flex; justify-content: space-between; font-weight: 700;">
+            <span>Computed Total:</span>
+            <span id="cost-total-display" style="color: var(--accent-amber);">₹ <%= (issue.costs && issue.costs.totalCost) || 0 %> INR</span>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+          <button type="submit" id="submit-costs-btn" class="btn btn-primary">Save Costs</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Provider Suggestions Modal -->
+  <div class="modal-overlay" id="providers-modal" role="dialog" aria-modal="true" aria-labelledby="providers-modal-title">
+    <div class="modal-dialog" style="max-width: 640px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="providers-modal-title">Contractor Matching Suggestions</h3>
+        <button type="button" class="btn btn-outline btn-sm" data-close-modal aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="providers-suggestions-list">
+          <p style="font-size: 0.85rem; color: var(--text-muted);">Loading criteria-matched providers...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>Close</button>
+      </div>
+    </div>
+  </div>
+<% } %>
+
+<!-- Resident Cancellation Modal -->
+<div class="modal-overlay" id="cancel-modal" role="dialog" aria-modal="true" aria-labelledby="cancel-modal-title">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title" id="cancel-modal-title">Cancel Issue Manifest</h3>
+      <button type="button" class="btn btn-outline btn-sm" data-close-modal aria-label="Close dialog">&times;</button>
+    </div>
+    <form id="cancel-issue-form">
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+          Cancelling this issue marks it as withdrawn. This is a terminal state; please state why the repair is no longer required.
+        </p>
+
+        <div class="form-group">
+          <label for="cancel-reason" class="form-label">Cancellation Reason <span class="required">*</span></label>
+          <textarea id="cancel-reason" class="form-control" rows="3" placeholder="e.g. Issue resolved independently / duplicate report" required></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>Close</button>
+        <button type="submit" class="btn btn-danger">Confirm Cancellation</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Resident Provide Information Modal -->
+<div class="modal-overlay" id="provide-info-modal" role="dialog" aria-modal="true" aria-labelledby="provide-info-modal-title">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title" id="provide-info-modal-title">Provide Requested Information</h3>
+      <button type="button" class="btn btn-outline btn-sm" data-close-modal aria-label="Close dialog">&times;</button>
+    </div>
+    <form id="provide-info-form">
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+          The society management team requested additional clarification on this issue. Providing your input will return the manifest to active administrative review.
+        </p>
+        <div class="form-group">
+          <label for="provide-info-text" class="form-label">Response / Clarification Details <span class="required">*</span></label>
+          <textarea id="provide-info-text" name="note" class="form-control" rows="4" placeholder="Detail the requested access times, clarifying symptoms, or requested specifications..." required></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+        <button type="submit" id="submit-provide-info-btn" class="btn btn-primary">Submit Response</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Reopen Modal -->
+<div class="modal-overlay" id="reopen-modal" role="dialog" aria-modal="true" aria-labelledby="reopen-modal-title">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title" id="reopen-modal-title">Reopen Closed Issue</h3>
+      <button type="button" class="btn btn-outline btn-sm" data-close-modal aria-label="Close dialog">&times;</button>
+    </div>
+    <form id="reopen-issue-form">
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+          Reopening an issue returns it to active operations queue. Please describe why the resolution requires further intervention.
+        </p>
+
+        <div class="form-group">
+          <label for="reopen-note" class="form-label">Reopening Note <span class="required">*</span></label>
+          <textarea id="reopen-note" class="form-control" rows="3" placeholder="Describe recurrence of failure, incomplete repair, or secondary damage..." required></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>Close</button>
+        <button type="submit" class="btn btn-primary">Reopen Manifest</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add Evidence Modal -->
+<div class="modal-overlay" id="evidence-modal" role="dialog" aria-modal="true" aria-labelledby="evidence-modal-title">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title" id="evidence-modal-title">Upload Inspection Evidence</h3>
+      <button type="button" class="btn btn-outline btn-sm" data-close-modal aria-label="Close dialog">&times;</button>
+    </div>
+    <form id="upload-evidence-form">
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="modal-evidence-file" class="form-label">Select File <span class="required">*</span></label>
+          <input type="file" id="modal-evidence-file" class="form-control" accept="image/jpeg,image/png,image/webp,application/pdf" required>
+          <span class="form-help">Max 5MB. JPEG, PNG, WebP, PDF. Stored privately on server.</span>
+        </div>
+
+        <div id="evidence-upload-alert" class="form-error" style="display: none; margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; background: var(--accent-crimson-subtle); border-radius: var(--radius-xs);"></div>
+
+        <div class="form-group">
+          <label for="modal-evidence-caption" class="form-label">Caption / Description</label>
+          <input type="text" id="modal-evidence-caption" class="form-control" placeholder="e.g. Photo taken after water valve shutoff" maxlength="200">
+        </div>
+
+        <% if (isAdmin) { %>
+          <div class="form-group">
+            <label class="form-label">Attachment Context</label>
+            <select id="modal-evidence-context" class="form-control">
+              <option value="issue">Issue Inspection Evidence</option>
+              <option value="repair_completion">Repair Completion Evidence</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer;">
+              <input type="checkbox" id="modal-evidence-internal" value="true">
+              <span>Internal evidence (hidden from residents)</span>
+            </label>
+          </div>
+        <% } %>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+        <button type="submit" id="modal-upload-submit-btn" class="btn btn-primary">Upload Evidence</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/issue-details.js"></script>
+
+<%- include('../partials/footer') %>

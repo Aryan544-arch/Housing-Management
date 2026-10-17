@@ -1,0 +1,360 @@
+<%- include('../partials/header', { title: activeSociety ? activeSociety.name + ' | Contractor Directory' : 'Service Providers' }) %>
+
+<div style="margin-bottom: 3rem;">
+  <!-- Header -->
+  <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border-medium);">
+    <div>
+      <div class="eyebrow">PRIVATE CONTRACTOR DIRECTORY</div>
+      <h1 style="margin-bottom: 0.25rem;">Service Providers & Maintenance Contractors</h1>
+      <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">
+        <span class="tag-mono"><%= activeSociety ? activeSociety.name : 'Society' %></span>
+        <span>·</span>
+        <span class="role-pill admin">ADMINISTRATIVE DIRECTORY</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+      <button type="button" id="refresh-providers-btn" class="btn btn-secondary btn-sm" title="Synchronize providers with society register">
+        <span id="prov-refresh-spinner" style="display: none;">⏳</span>
+        <span id="prov-refresh-label">↻ Sync API</span>
+      </button>
+      <a href="/societies/<%= activeSociety._id %>/dashboard" class="btn btn-outline btn-sm">
+        <span>Operations Dashboard</span>
+      </a>
+      <button type="button" id="open-add-provider-btn" class="btn btn-primary btn-sm">
+        <span>+ Register New Contractor</span>
+      </button>
+    </div>
+  </div>
+
+  <input type="hidden" id="society-id-val" value="<%= activeSociety ? activeSociety._id : '' %>">
+
+  <!-- Network / Sync Alert Banner -->
+  <div id="providers-alert" class="form-error" role="alert" aria-live="assertive" style="display: none; margin-bottom: 1.25rem; padding: 0.75rem 1rem; border-radius: var(--radius-sm); background: var(--accent-crimson-subtle); border: 1px solid rgba(197, 48, 48, 0.3);"></div>
+
+  <!-- Contractor Operational Metrics -->
+  <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1.5rem;">
+    <div class="metric-card">
+      <span class="metric-label">Total Registered</span>
+      <span class="metric-value" id="metric-prov-total"><%= providers ? providers.length : 0 %></span>
+      <span class="metric-sub">Contractors in society roster</span>
+    </div>
+
+    <div class="metric-card">
+      <span class="metric-label">Active & Dispatchable</span>
+      <span class="metric-value" id="metric-prov-active" style="color: var(--accent-sage);"><%= providers ? providers.filter(p => p.status === 'active').length : 0 %></span>
+      <span class="metric-sub">Eligible for issue assignment</span>
+    </div>
+
+    <div class="metric-card">
+      <span class="metric-label">Inactive / Suspended</span>
+      <span class="metric-value" id="metric-prov-inactive" style="color: var(--accent-crimson);"><%= providers ? providers.filter(p => p.status === 'inactive').length : 0 %></span>
+      <span class="metric-sub">Excluded from automated suggestions</span>
+    </div>
+  </div>
+
+  <!-- Provider Directory Panel -->
+  <div class="panel">
+    <div class="panel-header" style="flex-wrap: wrap; gap: 1rem;">
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <h2 class="panel-title">CONTRACTOR ROSTER</h2>
+        <span class="tag-mono" id="provider-count-tag"><%= providers ? providers.length : 0 %> RECORDED</span>
+      </div>
+
+      <!-- Filters & Sorting -->
+      <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <select id="prov-filter-category" class="form-control" style="width: auto; padding: 0.4rem 0.65rem; font-size: 0.82rem;" aria-label="Filter by trade category">
+          <option value="">All Trade Categories</option>
+          <option value="plumbing">Plumbing</option>
+          <option value="electrical">Electrical</option>
+          <option value="carpentry">Carpentry</option>
+          <option value="security">Security</option>
+          <option value="housekeeping">Housekeeping</option>
+          <option value="elevator">Elevator</option>
+          <option value="common_area">Common Area</option>
+          <option value="structural">Structural</option>
+          <option value="other">Other</option>
+        </select>
+
+        <select id="prov-filter-status" class="form-control" style="width: auto; padding: 0.4rem 0.65rem; font-size: 0.82rem;" aria-label="Filter by contractor status">
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+
+        <select id="prov-sort" class="form-control" style="width: auto; padding: 0.4rem 0.65rem; font-size: 0.82rem;" aria-label="Sort contractors">
+          <option value="name-asc">Name (A–Z)</option>
+          <option value="name-desc">Name (Z–A)</option>
+          <option value="status-active">Active First</option>
+        </select>
+
+        <input 
+          type="text" 
+          id="prov-search" 
+          class="form-control" 
+          placeholder="Search name, phone, trade..." 
+          style="width: 190px; padding: 0.4rem 0.65rem; font-size: 0.82rem;"
+          aria-label="Search contractor roster"
+        >
+
+        <button type="button" id="clear-prov-filters-btn" class="btn btn-outline btn-sm" title="Reset all filters">
+          Reset
+        </button>
+      </div>
+    </div>
+
+    <!-- Providers Table Container -->
+    <div id="providers-container">
+      <% const hasProviders = providers && providers.length > 0; %>
+      <div id="providers-empty-state" style="<%= hasProviders ? 'display: none;' : '' %> text-align: center; padding: 3.5rem 1.5rem; color: var(--text-muted);">
+        <div style="font-size: 2.5rem; margin-bottom: 0.75rem; opacity: 0.6;">🛠</div>
+        <h3 style="font-size: 1.15rem; color: var(--text-primary); margin-bottom: 0.35rem;">No Service Contractors Registered</h3>
+        <p style="font-size: 0.88rem; max-width: 440px; margin: 0 auto 1.25rem;">
+          Maintain pre-screened trades, hourly rates, and block coverage for building repairs.
+        </p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('open-add-provider-btn').click();">
+          + Register First Contractor
+        </button>
+      </div>
+
+      <div class="table-container" id="providers-table-wrap" style="<%= hasProviders ? '' : 'display: none;' %>">
+        <table class="data-table" id="providers-table">
+          <thead>
+            <tr>
+              <th>Contractor / Company</th>
+              <th>Trades / Categories</th>
+              <th>Contact Details</th>
+              <th>Contact Person</th>
+              <th>Pricing Structure</th>
+              <th>Service Area</th>
+              <th>Status</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="providers-tbody">
+            <% (providers || []).forEach(function(prov) { %>
+              <tr 
+                class="provider-row" 
+                data-id="<%= prov._id %>"
+                data-name="<%= prov.name.toLowerCase() %>" 
+                data-status="<%= prov.status %>"
+                data-categories="<%= (prov.categories || []).join(' ').toLowerCase() %>"
+                data-phone="<%= (prov.contactPhone || '').toLowerCase() %>"
+                data-email="<%= (prov.contactEmail || '').toLowerCase() %>"
+                data-person="<%= (prov.contactPerson || '').toLowerCase() %>"
+              >
+                <td>
+                  <strong style="color: var(--text-primary); font-size: 0.92rem;"><%= prov.name %></strong>
+                  <% if (prov.description) { %>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                      <%= prov.description %>
+                    </div>
+                  <% } %>
+                </td>
+                <td>
+                  <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                    <% (prov.categories || []).forEach(function(cat) { %>
+                      <span class="tag-mono" style="text-transform: capitalize;"><%= cat %></span>
+                    <% }); %>
+                  </div>
+                </td>
+                <td style="font-family: var(--font-mono); font-size: 0.82rem; color: var(--text-primary);">
+                  <%= prov.contactPhone %>
+                  <% if (prov.contactEmail) { %>
+                    <div style="font-size: 0.72rem; color: var(--text-muted);"><%= prov.contactEmail %></div>
+                  <% } %>
+                </td>
+                <td style="font-size: 0.85rem;">
+                  <%= prov.contactPerson || 'Office / Primary' %>
+                </td>
+                <td>
+                  <span class="tag-mono" style="text-transform: uppercase;">
+                    <%= (prov.pricing && prov.pricing.rateType) ? prov.pricing.rateType.replace(/_/g, ' ') : 'Quote' %>
+                  </span>
+                  <% if (prov.pricing && (prov.pricing.minRate !== undefined || prov.pricing.maxRate !== undefined)) { %>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                      ₹<%= prov.pricing.minRate || 0 %> - ₹<%= prov.pricing.maxRate || '...' %>
+                    </div>
+                  <% } else if (prov.priceEstimate) { %>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+                      <%= prov.priceEstimate %>
+                    </div>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (!prov.serviceArea || prov.serviceArea.allBlocks) { %>
+                    <span class="tag-mono" style="color: var(--accent-sage);">ALL BLOCKS</span>
+                  <% } else { %>
+                    <span class="tag-mono" style="color: var(--accent-blueprint);">
+                      <%= (prov.serviceArea.blocks || []).join(', ') || 'Restricted' %>
+                    </span>
+                  <% } %>
+                </td>
+                <td>
+                  <span class="badge-status <%= prov.status === 'active' ? 'verified_closed' : 'cancelled' %>">
+                    <%= prov.status %>
+                  </span>
+                </td>
+                <td style="text-align: right; white-space: nowrap;">
+                  <button type="button" class="btn btn-outline btn-sm edit-provider-btn" data-id="<%= prov._id %>">
+                    Edit
+                  </button>
+                  <% if (prov.status === 'active') { %>
+                    <button type="button" class="btn btn-outline btn-sm toggle-status-provider-btn" data-id="<%= prov._id %>" data-name="<%= prov.name %>" data-action="deactivate">
+                      Deactivate
+                    </button>
+                  <% } else { %>
+                    <button type="button" class="btn btn-secondary btn-sm toggle-status-provider-btn" data-id="<%= prov._id %>" data-name="<%= prov.name %>" data-action="activate" style="color: var(--accent-sage);">
+                      Activate
+                    </button>
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+
+            <!-- Filtered Empty State Row -->
+            <tr id="no-matching-providers-row" style="display: none;">
+              <td colspan="8" style="text-align: center; padding: 2.5rem 1.5rem; color: var(--text-muted);">
+                <div style="font-family: var(--font-mono); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-amber); margin-bottom: 0.35rem;">
+                  [ NO MATCHING CONTRACTORS ]
+                </div>
+                <div style="font-size: 0.92rem; color: var(--text-primary); margin-bottom: 0.75rem;">
+                  No service contractors match your current filter selection.
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm clear-prov-filters-trigger">
+                  Clear All Filters
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div id="providers-loading-indicator" style="display: none; padding: 2rem; text-align: center; color: var(--text-muted); background: var(--bg-surface-elevated); border-top: 1px solid var(--border-subtle);">
+          <div style="font-family: var(--font-mono); font-size: 0.82rem; color: var(--accent-amber);">
+            [ SYNCHRONIZING CONTRACTOR ROSTER... ]
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Provider Modal -->
+<div class="modal-overlay" id="provider-modal" role="dialog" aria-modal="true" aria-labelledby="provider-modal-title">
+  <div class="modal-dialog" style="max-width: 620px;">
+    <div class="modal-header">
+      <h3 class="modal-title" id="provider-modal-title">Register Service Contractor</h3>
+      <button type="button" class="btn btn-outline btn-sm" data-close-modal aria-label="Close modal">&times;</button>
+    </div>
+    <form id="provider-form" novalidate>
+      <input type="hidden" id="provider-id-hidden" value="">
+      <div class="modal-body">
+        <div id="provider-modal-alert" class="form-error" role="alert" aria-live="assertive" style="display: none; margin-bottom: 1rem; padding: 0.6rem 0.85rem; background: var(--accent-crimson-subtle); border-radius: var(--radius-xs); border: 1px solid rgba(197, 48, 48, 0.3);"></div>
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label for="prov-name-input" class="form-label">Contractor / Company Name <span class="required">*</span></label>
+            <input type="text" id="prov-name-input" name="name" class="form-control" placeholder="e.g. Acme Electrical & Elevators Ltd." required minlength="2" maxlength="100">
+          </div>
+
+          <div class="form-group">
+            <label for="prov-status-select" class="form-label">Status</label>
+            <select id="prov-status-select" name="status" class="form-control">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Trade Categories <span class="required">*</span></label>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; font-size: 0.85rem;">
+            <% ['plumbing', 'electrical', 'carpentry', 'security', 'housekeeping', 'elevator', 'common_area', 'structural', 'other'].forEach(function(cat) { %>
+              <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-xs); cursor: pointer;">
+                <input type="checkbox" name="prov-cat" value="<%= cat %>">
+                <span style="text-transform: capitalize;"><%= cat %></span>
+              </label>
+            <% }); %>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label for="prov-phone-input" class="form-label">Contact Phone <span class="required">*</span></label>
+            <input type="tel" id="prov-phone-input" name="contactPhone" class="form-control" placeholder="+91 98765 01234" required minlength="5" maxlength="30">
+          </div>
+
+          <div class="form-group">
+            <label for="prov-email-input" class="form-label">Contact Email</label>
+            <input type="email" id="prov-email-input" name="contactEmail" class="form-control" placeholder="dispatch@acme.domain" maxlength="100">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="prov-person-input" class="form-label">Contact Person / Representative</label>
+          <input type="text" id="prov-person-input" name="contactPerson" class="form-control" placeholder="e.g. Rajesh Kumar (Supervisor)" maxlength="100">
+        </div>
+
+        <div class="form-group">
+          <label for="prov-desc-input" class="form-label">Description / Internal Notes</label>
+          <textarea id="prov-desc-input" name="description" class="form-control" rows="2" placeholder="Experience, certifications, society contractor agreement notes..." maxlength="1000"></textarea>
+        </div>
+
+        <!-- Pricing Structure -->
+        <div style="background: var(--bg-surface-elevated); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1rem;">
+          <div style="font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700; color: var(--accent-amber); margin-bottom: 0.5rem;">PRICING RATE STRUCTURE</div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+            <div>
+              <label for="prov-rate-type" class="form-label" style="font-size: 0.78rem;">Rate Type</label>
+              <select id="prov-rate-type" class="form-control" style="font-size: 0.82rem;">
+                <option value="quote_required">Quote Required</option>
+                <option value="hourly">Hourly</option>
+                <option value="fixed">Fixed</option>
+                <option value="per_visit">Per Visit</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="prov-min-rate" class="form-label" style="font-size: 0.78rem;">Min Rate (₹)</label>
+              <input type="number" id="prov-min-rate" min="0" class="form-control" placeholder="0">
+            </div>
+
+            <div>
+              <label for="prov-max-rate" class="form-label" style="font-size: 0.78rem;">Max Rate (₹)</label>
+              <input type="number" id="prov-max-rate" min="0" class="form-control" placeholder="Optional">
+            </div>
+          </div>
+
+          <div>
+            <label for="prov-estimate-input" class="form-label" style="font-size: 0.78rem;">Price Estimate Summary Note</label>
+            <input type="text" id="prov-estimate-input" class="form-control" style="font-size: 0.82rem;" placeholder="e.g. ₹500 standard visit fee / free inspection quote" maxlength="100">
+          </div>
+        </div>
+
+        <!-- Service Area -->
+        <div style="background: var(--bg-surface-elevated); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 1rem;">
+          <div style="font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700; color: var(--accent-blueprint); margin-bottom: 0.5rem;">SERVICE COVERAGE</div>
+
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; margin-bottom: 0.5rem;">
+            <input type="checkbox" id="prov-all-blocks" checked>
+            <span>Contractor services all blocks and society common areas</span>
+          </label>
+
+          <div id="prov-blocks-group" style="display: none;">
+            <label for="prov-blocks-input" class="form-label" style="font-size: 0.78rem;">Restricted Block / Wing Names (comma separated)</label>
+            <input type="text" id="prov-blocks-input" class="form-control" placeholder="e.g. Tower A, Tower B, Wing 3">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+        <button type="submit" id="save-provider-submit-btn" class="btn btn-primary">Save Contractor</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/providers.js"></script>
+
+<%- include('../partials/footer') %>

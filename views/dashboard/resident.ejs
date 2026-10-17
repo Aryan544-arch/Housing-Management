@@ -1,0 +1,227 @@
+<%- include('../partials/header', { title: activeSociety ? activeSociety.name + ' | Resident Dashboard' : 'Resident Dashboard' }) %>
+
+<div style="margin-bottom: 2rem;">
+  <!-- Editorial Dashboard Header -->
+  <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border-medium);">
+    <div>
+      <div class="eyebrow">RESIDENT OPERATIONS CONSOLE</div>
+      <h1 style="margin-bottom: 0.25rem;"><%= activeSociety ? activeSociety.name : 'Society Dashboard' %></h1>
+      <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">
+        <span class="tag-mono"><%= activeSociety ? activeSociety.code : 'CODE' %></span>
+        <span>·</span>
+        <span>Assigned Unit: <strong><%= flatNumber || 'Resident Member' %></strong></span>
+      </div>
+    </div>
+
+    <div>
+      <a href="/societies/<%= activeSociety._id %>/issues/new" class="btn btn-primary btn-lg">
+        <span>+ Report New Issue</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Operational Metrics Grid -->
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <span class="metric-label">My Active Issues</span>
+      <span class="metric-value" id="metric-my-active"><%= issues ? issues.filter(i => !['verified_closed', 'cancelled'].includes(i.status)).length : 0 %></span>
+      <span class="metric-sub">Pending triage or in-progress repair</span>
+    </div>
+
+    <div class="metric-card">
+      <span class="metric-label">Under Investigation</span>
+      <span class="metric-value" id="metric-under-review"><%= issues ? issues.filter(i => ['under_review', 'awaiting_information', 'provider_contact_pending'].includes(i.status)).length : 0 %></span>
+      <span class="metric-sub">Admin review & scheduling</span>
+    </div>
+
+    <div class="metric-card">
+      <span class="metric-label">Repairs In Progress</span>
+      <span class="metric-value" id="metric-in-progress" style="color: var(--accent-amber);"><%= issues ? issues.filter(i => ['scheduled', 'in_progress', 'completion_submitted'].includes(i.status)).length : 0 %></span>
+      <span class="metric-sub">Assigned contractor or active work</span>
+    </div>
+
+    <div class="metric-card">
+      <span class="metric-label">Verified & Closed</span>
+      <span class="metric-value" id="metric-closed" style="color: var(--accent-sage);"><%= issues ? issues.filter(i => i.status === 'verified_closed').length : 0 %></span>
+      <span class="metric-sub">Work signed off by administration</span>
+    </div>
+  </div>
+
+  <input type="hidden" id="society-id-val" value="<%= activeSociety ? activeSociety._id : '' %>">
+
+  <!-- Manifest Sync / Network Error Alert -->
+  <div id="manifest-error-alert" class="form-error" role="alert" aria-live="assertive" style="margin-bottom: 1.25rem; padding: 0.75rem 1rem; border-radius: var(--radius-sm); background: var(--accent-crimson-subtle); border: 1px solid rgba(197, 48, 48, 0.3);"></div>
+
+  <!-- Issue Manifest Panel -->
+  <div class="panel">
+    <div class="panel-header" style="flex-wrap: wrap; gap: 1rem;">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <h2 class="panel-title">Maintenance Manifest</h2>
+        <span class="tag-mono" id="issue-count-tag"><%= issues ? issues.length : 0 %> TOTAL LOGGED</span>
+      </div>
+
+      <!-- Quick Filter Tools -->
+      <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <select id="filter-status" class="form-control" style="width: auto; padding: 0.4rem 0.65rem; font-size: 0.82rem;" aria-label="Filter issues by status">
+          <option value="">All Statuses</option>
+          <option value="submitted">Submitted</option>
+          <option value="under_review">Under Review</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="in_progress">In Progress</option>
+          <option value="completion_submitted">Completion Submitted</option>
+          <option value="verified_closed">Verified & Closed</option>
+          <option value="reopened">Reopened</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+
+        <select id="filter-priority" class="form-control" style="width: auto; padding: 0.4rem 0.65rem; font-size: 0.82rem;" aria-label="Filter issues by priority">
+          <option value="">All Priorities</option>
+          <option value="urgent">Urgent</option>
+          <option value="high">High</option>
+          <option value="normal">Normal</option>
+          <option value="low">Low</option>
+        </select>
+
+        <select id="filter-category" class="form-control" style="width: auto; padding: 0.4rem 0.65rem; font-size: 0.82rem;" aria-label="Filter issues by category">
+          <option value="">All Categories</option>
+          <option value="plumbing">🚰 Plumbing</option>
+          <option value="electrical">⚡ Electrical</option>
+          <option value="carpentry">🪚 Carpentry</option>
+          <option value="security">🛡️ Security</option>
+          <option value="housekeeping">🧹 Housekeeping</option>
+          <option value="elevator">🛗 Elevator</option>
+          <option value="common_area">🏛️ Common Area</option>
+          <option value="structural">🧱 Structural</option>
+          <option value="other">⚙️ Other</option>
+        </select>
+
+        <input 
+          type="text" 
+          id="search-issues" 
+          class="form-control" 
+          placeholder="Search by title/ref..." 
+          style="width: 170px; padding: 0.4rem 0.65rem; font-size: 0.82rem;"
+          aria-label="Search issues by title or reference"
+        >
+
+        <button type="button" id="refresh-manifest-btn" class="btn btn-secondary btn-sm" title="Refresh live issue manifest from server">
+          <span id="refresh-spinner" style="display: none;">⏳</span>
+          <span id="refresh-label">↻ Sync API</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Selection: My Unit Issues vs Common Area Issues -->
+    <div class="tab-group">
+      <button type="button" class="tab-btn active" data-tab="all">All Visible Issues (<%= issues ? issues.length : 0 %>)</button>
+      <button type="button" class="tab-btn" data-tab="my-unit">My Unit Issues (<%= issues ? issues.filter(i => i.location && i.location.type === 'unit').length : 0 %>)</button>
+      <button type="button" class="tab-btn" data-tab="common-area">Common Area Issues (<%= issues ? issues.filter(i => i.location && i.location.type === 'common_area').length : 0 %>)</button>
+    </div>
+
+    <!-- Issues Table / List Container -->
+    <div id="issues-container">
+      <% if (!issues || issues.length === 0) { %>
+        <div style="text-align: center; padding: 3.5rem 1.5rem; color: var(--text-muted);">
+          <div style="font-size: 2.5rem; margin-bottom: 0.75rem; opacity: 0.6;">🏛</div>
+          <h3 style="font-size: 1.15rem; color: var(--text-primary); margin-bottom: 0.35rem;">No Maintenance Issues Logged</h3>
+          <p style="font-size: 0.88rem; max-width: 400px; margin: 0 auto 1.25rem;">There are currently no active maintenance issues recorded for your unit or society common areas.</p>
+          <a href="/societies/<%= activeSociety._id %>/issues/new" class="btn btn-primary btn-sm">+ Report First Issue</a>
+        </div>
+      <% } else { %>
+        <div class="table-container">
+          <table class="data-table" id="resident-issues-table">
+            <thead>
+              <tr>
+                <th>REF / ID</th>
+                <th>Issue Summary</th>
+                <th>Category</th>
+                <th>Location</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Logged At</th>
+                <th style="text-align: right;">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% issues.forEach(function(issue) { %>
+                <tr 
+                  class="issue-row" 
+                  data-id="<%= issue._id %>"
+                  data-status="<%= issue.status %>" 
+                  data-priority="<%= issue.priority %>" 
+                  data-category="<%= issue.category %>"
+                  data-location-type="<%= issue.location ? issue.location.type : '' %>"
+                  data-title="<%= issue.title.toLowerCase() %>"
+                >
+                  <td>
+                    <span class="tag-mono">#<%= issue._id.toString().slice(-6).toUpperCase() %></span>
+                  </td>
+                  <td>
+                    <a href="/societies/<%= activeSociety._id %>/issues/<%= issue._id %>" style="font-weight: 600; color: var(--text-primary);">
+                      <%= issue.title %>
+                    </a>
+                    <% if (issue.cancellationReason) { %>
+                      <div style="font-size: 0.75rem; color: var(--accent-crimson);">Cancelled: <%= issue.cancellationReason %></div>
+                    <% } %>
+                  </td>
+                  <td>
+                    <span class="tag-mono" style="text-transform: capitalize;"><%= issue.category %></span>
+                  </td>
+                  <td>
+                    <% if (issue.location && issue.location.type === 'unit') { %>
+                      <span style="font-size: 0.82rem; font-weight: 500;">
+                        Unit: <%= issue.location.blockOrWing %> - <%= issue.location.flatOrUnit %>
+                      </span>
+                    <% } else if (issue.location && issue.location.type === 'common_area') { %>
+                      <span style="font-size: 0.82rem; color: var(--accent-blueprint);">
+                        Common: <%= issue.location.areaDescription %>
+                      </span>
+                    <% } %>
+                  </td>
+                  <td>
+                    <span class="badge-priority <%= issue.priority %>"><%= issue.priority %></span>
+                  </td>
+                  <td>
+                    <span class="badge-status <%= issue.status %>"><%= issue.status.replace(/_/g, ' ') %></span>
+                  </td>
+                  <td style="font-family: var(--font-mono); font-size: 0.78rem;">
+                    <%= new Date(issue.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) %>
+                  </td>
+                  <td style="text-align: right;">
+                    <a href="/societies/<%= activeSociety._id %>/issues/<%= issue._id %>" class="btn btn-outline btn-sm">
+                      Inspect &rarr;
+                    </a>
+                  </td>
+                </tr>
+              <% }); %>
+
+              <!-- Filtered Empty State Row -->
+              <tr id="no-matching-issues-row" style="display: none;">
+                <td colspan="8" style="text-align: center; padding: 2.5rem 1.5rem; color: var(--text-muted);">
+                  <div style="font-family: var(--font-mono); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-amber); margin-bottom: 0.35rem;">
+                    [ NO MATCHING RECORDS ]
+                  </div>
+                  <div style="font-size: 0.92rem; color: var(--text-primary); margin-bottom: 0.75rem;">
+                    No maintenance issues match your current filter selection.
+                  </div>
+                  <button type="button" id="clear-filters-btn" class="btn btn-secondary btn-sm">
+                    Clear All Filters
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div id="manifest-loading-indicator" style="display: none; padding: 2rem; text-align: center; color: var(--text-muted); background: var(--bg-surface-elevated); border-top: 1px solid var(--border-subtle);">
+            <div style="font-family: var(--font-mono); font-size: 0.82rem; color: var(--accent-amber);">
+              [ SYNCING SOCIETY MANIFEST... ]
+            </div>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<script src="/js/issues.js"></script>
+
+<%- include('../partials/footer') %>

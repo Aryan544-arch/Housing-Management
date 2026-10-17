@@ -14,8 +14,28 @@ const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
-// Security HTTP headers
-app.use(helmet());
+// Security HTTP headers with content security policy permitting self scripts and Google Fonts
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "blob:"],
+        connectSrc: ["'self'"]
+      }
+    }
+  })
+);
+
+// EJS View Engine configuration
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// Serve static assets from public directory
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Global rate limiter
 const limiter = rateLimit({
@@ -44,6 +64,10 @@ app.use(csrfProtection);
 app.use('/', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/societies', societyRoutes);
+
+// Mount Web UI routes
+const webRoutes = require('./routes/webRoutes');
+app.use('/', webRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);

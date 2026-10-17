@@ -1,0 +1,25 @@
+  </main>
+
+  <footer style="background-color: var(--bg-surface); border-top: 1px solid var(--border-medium); padding: 2rem 1.5rem; margin-top: auto;">
+    <div style="max-width: var(--container-max); margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; font-size: 0.8rem; color: var(--text-muted);">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <span style="font-family: var(--font-mono); font-weight: 600; color: var(--text-secondary);">HOUSING MANAGEMENT · RESIDENT PORTAL</span>
+        <span>·</span>
+        <span class="tag-mono">SYS-V1.0</span>
+        <span>·</span>
+        <span style="color: var(--accent-sage);">● SYSTEM OPERATIONAL</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 1.5rem;">
+        <span style="font-family: var(--font-mono);">ENCRYPTED COOKIE SESSIONS</span>
+        <span style="font-family: var(--font-mono);">HMAC-CSRF ACTIVE</span>
+        <span>&copy; <%= new Date().getFullYear() %> Architectural Operations</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Core Client JavaScript Bundle -->
+  <script src="/js/main.js"></script>
+  <%- typeof extraJs !== 'undefined' ? extraJs : '' %>
+</body>
+</html>

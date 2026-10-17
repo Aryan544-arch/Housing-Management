@@ -1,0 +1,203 @@
+<%- include('../partials/header', { title: 'Report Building Issue' }) %>
+
+<div style="max-width: 760px; margin: 1rem auto 3rem;">
+  <!-- Breadcrumb & Header -->
+  <div style="margin-bottom: 1.5rem;">
+    <a href="/societies/<%= activeSociety._id %>/dashboard" style="font-size: 0.85rem; color: var(--text-muted);">&larr; Back to Operational Dashboard</a>
+    <div class="eyebrow" style="margin-top: 0.75rem;">NEW ISSUE REPORT</div>
+    <h1 style="margin-bottom: 0.35rem;">Report Building or Unit Issue</h1>
+    <p style="font-size: 0.88rem;">Submit repair tickets directly to society facilities and administration.</p>
+  </div>
+
+  <div class="panel">
+    <!-- Form Error Alert -->
+    <div id="issue-form-alert" class="form-error" role="alert" aria-live="assertive" style="margin-bottom: 1.25rem; padding: 0.75rem 1rem; border-radius: var(--radius-sm); background: var(--accent-crimson-subtle); border: 1px solid rgba(248, 113, 113, 0.3);"></div>
+
+    <form id="create-issue-form" novalidate>
+      <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+      <input type="hidden" id="society-id-val" value="<%= activeSociety._id %>">
+
+      <!-- Location Type Toggle -->
+      <div class="form-group">
+        <label class="form-label">Issue Location Type <span class="required">*</span></label>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+          <label style="display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem; border: 1px solid var(--border-medium); border-radius: var(--radius-sm); background: var(--bg-surface-elevated); cursor: pointer;">
+            <input type="radio" name="locationType" value="unit" checked id="loc-type-unit">
+            <div>
+              <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">Residential Unit</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">Private apartment, flat, or balcony</div>
+            </div>
+          </label>
+
+          <label style="display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem; border: 1px solid var(--border-medium); border-radius: var(--radius-sm); background: var(--bg-surface-elevated); cursor: pointer;">
+            <input type="radio" name="locationType" value="common_area" id="loc-type-common">
+            <div>
+              <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">Society Common Area</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">Lobby, elevator, staircase, garden, gym</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Unit Specific Location Fields -->
+      <div id="unit-location-fields" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+        <div>
+          <label for="blockOrWing" class="form-label">Block / Wing <span class="required">*</span></label>
+          <input 
+            type="text" 
+            id="blockOrWing" 
+            name="blockOrWing" 
+            class="form-control" 
+            placeholder="e.g. Tower B / Wing 2"
+            value="<%= (typeof flatNumber !== 'undefined' && flatNumber) ? flatNumber.split('-')[0] : '' %>"
+          >
+          <div id="block-error" class="form-error">Block or wing is required for unit issues.</div>
+        </div>
+
+        <div>
+          <label for="flatOrUnit" class="form-label">Flat / Unit Number <span class="required">*</span></label>
+          <input 
+            type="text" 
+            id="flatOrUnit" 
+            name="flatOrUnit" 
+            class="form-control" 
+            placeholder="e.g. 402"
+            value="<%= (typeof flatNumber !== 'undefined' && flatNumber) ? flatNumber : '' %>"
+          >
+          <div id="flat-error" class="form-error">Flat or unit number is required.</div>
+        </div>
+      </div>
+
+      <!-- Common Area Specific Location Field -->
+      <div id="common-location-fields" style="display: none; margin-bottom: 1.25rem;">
+        <label for="areaDescription" class="form-label">Common Area Description <span class="required">*</span></label>
+        <input 
+          type="text" 
+          id="areaDescription" 
+          name="areaDescription" 
+          class="form-control" 
+          placeholder="e.g. Ground floor elevator entrance near North Gate"
+        >
+        <div id="area-error" class="form-error">Please describe the common area location.</div>
+      </div>
+
+      <!-- Category Picker -->
+      <div class="form-group">
+        <label class="form-label">Service Category <span class="required">*</span></label>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.6rem;">
+          <% const categories = [
+            { id: 'plumbing', name: 'Plumbing', icon: '🚰' },
+            { id: 'electrical', name: 'Electrical', icon: '⚡' },
+            { id: 'carpentry', name: 'Carpentry', icon: '🪚' },
+            { id: 'security', name: 'Security', icon: '🛡️' },
+            { id: 'housekeeping', name: 'Housekeeping', icon: '🧹' },
+            { id: 'elevator', name: 'Elevator', icon: '🛗' },
+            { id: 'common_area', name: 'Common Area', icon: '🏛️' },
+            { id: 'structural', name: 'Structural', icon: '🧱' },
+            { id: 'other', name: 'Other', icon: '⚙️' }
+          ]; %>
+
+          <% categories.forEach(function(cat, index) { %>
+            <label style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0.75rem 0.5rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); cursor: pointer; text-align: center; transition: all var(--transition-fast);">
+              <input type="radio" name="category" value="<%= cat.id %>" <%= index === 0 ? 'checked' : '' %> style="margin-bottom: 0.35rem;">
+              <span style="font-size: 1.25rem; margin-bottom: 0.2rem;"><%= cat.icon %></span>
+              <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);"><%= cat.name %></span>
+            </label>
+          <% }); %>
+        </div>
+      </div>
+
+      <!-- Priority Selection -->
+      <div class="form-group">
+        <label for="issue-priority" class="form-label">Severity / Priority</label>
+        <select id="issue-priority" name="priority" class="form-control" style="max-width: 280px;">
+          <option value="low">Low (Non-urgent cosmetic maintenance)</option>
+          <option value="normal" selected>Normal (Standard repair turnaround)</option>
+          <option value="high">High (Impairs unit or facility operations)</option>
+          <option value="urgent">Urgent (Immediate safety or water/power hazard)</option>
+        </select>
+      </div>
+
+      <!-- Title -->
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+          <label for="issue-title" class="form-label" style="margin-bottom: 0;">Issue Summary / Title <span class="required">*</span></label>
+          <span id="title-counter" style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">0 / 120</span>
+        </div>
+        <input 
+          type="text" 
+          id="issue-title" 
+          name="title" 
+          class="form-control" 
+          placeholder="e.g. Master bathroom primary pipe leaking water" 
+          required 
+          maxlength="120"
+        >
+        <div id="title-error" class="form-error">Title must be between 5 and 120 characters.</div>
+      </div>
+
+      <!-- Description -->
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+          <label for="issue-desc" class="form-label" style="margin-bottom: 0;">Detailed Description <span class="required">*</span></label>
+          <span id="desc-counter" style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">0 / 2000</span>
+        </div>
+        <textarea 
+          id="issue-desc" 
+          name="description" 
+          class="form-control" 
+          rows="5" 
+          placeholder="Describe the issue in detail: when it began, exact location, observable damage, or previous repair attempts..." 
+          required 
+          maxlength="2000"
+        ></textarea>
+        <div id="desc-error" class="form-error">Description must be between 10 and 2000 characters.</div>
+      </div>
+
+      <!-- Optional File Attachment / Evidence Drag-and-Drop Zone -->
+      <div class="form-group">
+        <label class="form-label">Attach Photo or Inspection Evidence (Optional)</label>
+        <div class="file-dropzone" id="evidence-dropzone">
+          <div class="file-dropzone-icon">📷</div>
+          <div style="font-weight: 600; font-size: 0.92rem; color: var(--text-primary); margin-bottom: 0.25rem;">
+            Drag & drop photo or document, or <span style="color: var(--accent-amber); text-decoration: underline;">browse</span>
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">
+            Supported: JPEG, PNG, WebP, PDF (Max 5MB). Files are encrypted & stored in private society storage.
+          </div>
+          <input type="file" id="evidence-file-input" name="file" accept="image/jpeg,image/png,image/webp,application/pdf" style="display: none;">
+        </div>
+
+        <div id="selected-file-display" style="display: none; align-items: center; justify-content: space-between; padding: 0.65rem 0.9rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); margin-top: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+            <span id="selected-file-icon">📄</span>
+            <span id="selected-file-name" style="font-weight: 600; color: var(--text-primary);"></span>
+            <span id="selected-file-size" class="tag-mono"></span>
+          </div>
+          <button type="button" id="remove-file-btn" class="btn btn-outline btn-sm" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">Remove</button>
+        </div>
+
+        <div style="margin-top: 0.5rem;">
+          <input type="text" id="evidence-caption" name="caption" class="form-control" placeholder="Brief caption for the file (e.g. Wall dampness after rain)" maxlength="200">
+        </div>
+      </div>
+
+      <!-- Advisory Disclaimer -->
+      <div style="border-left: 3px solid var(--accent-amber); padding-left: 0.75rem; font-size: 0.8rem; color: var(--text-muted); margin: 1.5rem 0;">
+        <strong>Advisory Note:</strong> Submitted issues undergo administrative review. An optional AI triage assessment can be triggered upon submission to verify categories and draft clarification inquiries.
+      </div>
+
+      <!-- Action Buttons -->
+      <div style="display: flex; align-items: center; justify-content: flex-end; gap: 1rem;">
+        <a href="/societies/<%= activeSociety._id %>/dashboard" class="btn btn-outline">Cancel</a>
+        <button type="submit" id="submit-issue-btn" class="btn btn-primary btn-lg">
+          <span>Submit Issue Manifest</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/issues.js"></script>
+
+<%- include('../partials/footer') %>

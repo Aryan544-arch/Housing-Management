@@ -1,0 +1,75 @@
+<%- include('../partials/header', { title: 'Log In' }) %>
+
+<div style="max-width: 440px; margin: 3rem auto;">
+  <div class="panel">
+    <div style="text-align: center; margin-bottom: 2rem;">
+      <div class="brand-monogram" style="margin: 0 auto 1rem; width: 44px; height: 44px; font-size: 1.35rem; background: var(--accent-primary); color: var(--text-inverted);">HM</div>
+      <div class="eyebrow">SECURE SIGN IN</div>
+      <h1 style="font-size: 1.75rem; margin-bottom: 0.5rem;">Access Society Portal</h1>
+      <p style="font-size: 0.88rem; color: var(--text-secondary);">Enter your verified credentials to access society operations and maintenance logs.</p>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="login-alert" class="form-error" role="alert" aria-live="assertive" style="margin-bottom: 1.25rem; padding: 0.75rem 1rem; border-radius: var(--radius-sm); background: var(--accent-crimson-subtle); border: 1px solid rgba(197, 48, 48, 0.3);"></div>
+
+    <form id="login-form" data-redirect="<%= typeof redirectUrl !== 'undefined' ? redirectUrl : '' %>" novalidate>
+      <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+
+      <div class="form-group">
+        <label for="login-email" class="form-label">Email Address <span class="required" aria-hidden="true">*</span></label>
+        <input 
+          type="email" 
+          id="login-email" 
+          name="email" 
+          class="form-control" 
+          placeholder="resident@society.domain" 
+          required 
+          autocomplete="email"
+          aria-describedby="email-error"
+          aria-invalid="false"
+          autofocus
+        >
+        <div id="email-error" class="form-error" role="alert">Please provide a valid email address.</div>
+      </div>
+
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+          <label for="login-password" class="form-label" style="margin-bottom: 0;">Password <span class="required" aria-hidden="true">*</span></label>
+        </div>
+        <input 
+          type="password" 
+          id="login-password" 
+          name="password" 
+          class="form-control" 
+          placeholder="••••••••••••" 
+          required 
+          autocomplete="current-password"
+          aria-describedby="password-error"
+          aria-invalid="false"
+        >
+        <div id="password-error" class="form-error" role="alert">Password is required (min 8 characters).</div>
+      </div>
+
+      <button type="submit" id="login-submit-btn" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+        <span>Authenticate & Access</span>
+      </button>
+    </form>
+
+    <div style="margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid var(--border-subtle); text-align: center; font-size: 0.85rem;">
+      <span style="color: var(--text-secondary);">Need a resident account?</span>
+      <a href="/register" style="font-weight: 600; margin-left: 0.35rem;">Register New Account &rarr;</a>
+    </div>
+
+    <div style="margin-top: 1rem; text-align: center;">
+      <a href="/verify-email" style="font-size: 0.75rem; color: var(--text-muted);">Email verification status & info</a>
+    </div>
+  </div>
+
+  <div style="margin-top: 1.5rem; text-align: center; font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">
+    SECURE SESSION · ORIGIN VALIDATED
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+
+<%- include('../partials/footer') %>

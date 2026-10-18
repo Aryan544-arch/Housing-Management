@@ -1455,5 +1455,74 @@ describe('Issue Management Lifecycle, Privacy, and State Machine Tests', () => {
       const data = await res.json();
       assert.match(data.message, /not found in this society/i);
     });
+
+    test('SECURITY: Non-submitter resident cannot update another resident private unit issue (403 Forbidden)', async () => {
+      const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues/${internalNoteIssueId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: resident2Cookie,
+          'X-CSRF-Token': extractRawCsrf(resident2Cookie)
+        },
+        body: JSON.stringify({ title: 'Unauthorized Modification by Resident 2' })
+      });
+      assert.strictEqual(res.status, 403);
+      const data = await res.json();
+      assert.match(data.message, /permission to update this issue/i);
+
+      // Verify DB title remained untouched
+      const dbIssue = await Issue.findById(internalNoteIssueId);
+      assert.strictEqual(dbIssue.title, 'Internal Note Privacy Test Issue');
+    });
+
+    test('SECURITY: Non-submitter resident cannot add notes to another resident private unit issue (403 Forbidden)', async () => {
+      const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues/${internalNoteIssueId}/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: resident2Cookie,
+          'X-CSRF-Token': extractRawCsrf(resident2Cookie)
+        },
+        body: JSON.stringify({ note: 'Intrusion attempt note' })
+      });
+      assert.strictEqual(res.status, 403);
+      const data = await res.json();
+      assert.match(data.message, /permission to comment on this issue/i);
+    });
+
+    test('SECURITY: Client attempt to overwrite server-governed fields (submittingResident, society) is rejected (400 Bad Request)', async () => {
+      const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues/${internalNoteIssueId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: resident1Cookie,
+          'X-CSRF-Token': extractRawCsrf(resident1Cookie)
+        },
+        body: JSON.stringify({ submittingResident: new mongoose.Types.ObjectId() })
+      });
+      assert.strictEqual(res.status, 400);
+      const data = await res.json();
+      assert.match(data.message, /cannot be updated directly/i);
+    });
+
+    test('SECURITY: Client attempt to alter location.type of an existing issue is rejected (400 Bad Request)', async () => {
+      const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues/${internalNoteIssueId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: resident1Cookie,
+          'X-CSRF-Token': extractRawCsrf(resident1Cookie)
+        },
+        body: JSON.stringify({
+          location: {
+            type: 'common_area',
+            areaDescription: 'Converted to Common Lobby'
+          }
+        })
+      });
+      assert.strictEqual(res.status, 400);
+      const data = await res.json();
+      assert.match(data.message, /cannot change location type of an existing issue/i);
+    });
   });
 });

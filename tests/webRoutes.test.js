@@ -322,7 +322,7 @@ describe('Web UI Routes & EJS Rendering Tests', () => {
     assert.ok(html.includes('isActive: true'));
   });
 
-  test('GET /dashboard for user with ZERO memberships renders accessible no-affiliations advisory', async () => {
+  test('GET /dashboard for user with ZERO memberships renders accessible no-affiliations advisory and society creation form', async () => {
     // Create standalone user with 0 memberships
     const userRes = await fetch(`${baseUrl}/api/auth/register`, {
       method: 'POST',
@@ -345,6 +345,64 @@ describe('Web UI Routes & EJS Rendering Tests', () => {
     assert.ok(html.includes('NO REGISTERED AFFILIATIONS'));
     assert.ok(html.includes('your registered email address'));
     assert.ok(!html.includes('unassigned@society.local'), 'Must not expose raw email address in action notice');
+    assert.ok(html.includes('id="create-society-form"'), 'Must render society creation form');
+    assert.ok(html.includes('id="society-name"'), 'Must include society name input');
+    assert.ok(html.includes('id="society-code"'), 'Must include society code input');
+    assert.ok(html.includes('/js/society.js'), 'Must include society client script');
+  });
+
+  test('User with zero memberships creates their first society and transitions to admin dashboard', async () => {
+    // 1. Register fresh user with 0 memberships
+    const userRes = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'First Admin User',
+        email: 'firstadmin@society.local',
+        password: 'Password123!',
+        phone: '9998887777'
+      })
+    });
+    const userCookie = extractCookie(userRes);
+
+    // 2. User creates first society via POST /api/societies
+    const createRes = await fetch(`${baseUrl}/api/societies`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: userCookie,
+        'X-CSRF-Token': extractRawCsrf(userCookie)
+      },
+      body: JSON.stringify({
+        name: 'Solaris Residences',
+        code: 'SOL-01',
+        address: { street: '100 Sunset Boulevard' }
+      })
+    });
+    assert.strictEqual(createRes.status, 201);
+    const createData = await createRes.json();
+    assert.strictEqual(createData.success, true);
+    assert.strictEqual(createData.society.name, 'Solaris Residences');
+    assert.strictEqual(createData.society.code, 'SOL-01');
+    assert.strictEqual(createData.membership.role, 'admin', 'Creator must be assigned admin role');
+
+    // 3. GET /dashboard now automatically routes to the new society dashboard
+    const dashRes = await fetch(`${baseUrl}/dashboard`, {
+      headers: { Cookie: userCookie },
+      redirect: 'manual'
+    });
+    assert.strictEqual(dashRes.status, 302);
+    assert.strictEqual(dashRes.headers.get('location'), `/societies/${createData.society._id}/dashboard`);
+
+    // 4. Accessing the society dashboard renders the Admin Operations Queue
+    const adminDashRes = await fetch(`${baseUrl}/societies/${createData.society._id}/dashboard`, {
+      headers: { Cookie: userCookie }
+    });
+    assert.strictEqual(adminDashRes.status, 200);
+    const adminHtml = await adminDashRes.text();
+    assert.ok(adminHtml.includes('SOCIETY OPERATIONS HEADQUARTERS'));
+    assert.ok(adminHtml.includes('OPERATIONS QUEUE'));
+    assert.ok(adminHtml.includes('Solaris Residences'));
   });
 
   test('GET /dashboard for user with MULTIPLE active societies renders society selection console', async () => {

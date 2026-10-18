@@ -45,8 +45,85 @@
           </div>
         </div>
 
+        <!-- Option: Register New Society to Become Administrator -->
+        <div style="margin: 2rem auto 1.5rem; max-width: 520px;">
+          <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;">
+            <div style="flex: 1; height: 1px; background: var(--border-medium);"></div>
+            <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">OR INITIALIZE NEW SOCIETY</span>
+            <div style="flex: 1; height: 1px; background: var(--border-medium);"></div>
+          </div>
+
+          <div style="background: var(--bg-surface-elevated); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 1.5rem; text-align: left;">
+            <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem;">
+              <span class="tag-mono" style="background: var(--bg-surface); color: var(--accent-sage); border-color: var(--border-medium);">ADMIN ONBOARDING</span>
+            </div>
+            <h3 style="font-size: 1.15rem; margin-bottom: 0.35rem; color: var(--text-primary); font-family: var(--font-heading);">
+              Register Housing Society
+            </h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin: 0 0 1.25rem 0;">
+              Establishing a new society? Register below to become its administrator and open the management portal.
+            </p>
+
+            <!-- Alert notification box for errors and success -->
+            <div id="create-society-alert" class="form-error" role="alert" aria-live="assertive" style="display: none; margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: var(--radius-sm);"></div>
+
+            <form id="create-society-form" novalidate>
+              <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+
+              <div class="form-group" style="margin-bottom: 1rem;">
+                <label for="society-name" class="form-label" style="font-size: 0.82rem; font-weight: 600;">Society Name <span class="required" style="color: var(--accent-terracotta);">*</span></label>
+                <input
+                  type="text"
+                  id="society-name"
+                  name="name"
+                  class="form-control"
+                  placeholder="e.g. Green Heights Society"
+                  minlength="2"
+                  maxlength="150"
+                  required
+                  style="font-size: 0.88rem; padding: 0.55rem 0.75rem;"
+                >
+                <div id="society-name-error" class="form-error" style="display: none; font-size: 0.78rem; color: var(--accent-terracotta); margin-top: 0.25rem;">Society name must be at least 2 characters.</div>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 1rem;">
+                <label for="society-code" class="form-label" style="font-size: 0.82rem; font-weight: 600;">Society Code <span class="required" style="color: var(--accent-terracotta);">*</span></label>
+                <input
+                  type="text"
+                  id="society-code"
+                  name="code"
+                  class="form-control"
+                  placeholder="e.g. GHS-01"
+                  minlength="3"
+                  maxlength="20"
+                  required
+                  style="font-size: 0.88rem; padding: 0.55rem 0.75rem; text-transform: uppercase;"
+                >
+                <div id="society-code-error" class="form-error" style="display: none; font-size: 0.78rem; color: var(--accent-terracotta); margin-top: 0.25rem;">Code must be 3-20 alphanumeric characters, hyphens, or underscores.</div>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 1.25rem;">
+                <label for="society-address" class="form-label" style="font-size: 0.82rem; font-weight: 600;">Address / Campus Location <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">(Optional)</span></label>
+                <input
+                  type="text"
+                  id="society-address"
+                  name="address"
+                  class="form-control"
+                  placeholder="e.g. 104 Palm Avenue, Sector 5"
+                  maxlength="250"
+                  style="font-size: 0.88rem; padding: 0.55rem 0.75rem;"
+                >
+              </div>
+
+              <button type="submit" id="create-society-submit-btn" class="btn btn-primary btn-sm" style="width: 100%; justify-content: center; padding: 0.65rem 1rem;">
+                <span>Create Society &amp; Enter Admin Portal &rarr;</span>
+              </button>
+            </form>
+          </div>
+        </div>
+
         <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 1.25rem;">
-          <button type="button" onclick="window.location.reload()" class="btn btn-primary btn-sm">
+          <button type="button" onclick="window.location.reload()" class="btn btn-outline btn-sm">
             <span>Refresh Affiliations</span>
           </button>
           <button type="button" class="btn btn-outline btn-sm logout-btn" id="zero-affiliations-logout-btn">
@@ -98,9 +175,9 @@
       <div style="display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 1.75rem;">
         <% actives.forEach(function(m) { %>
           <% if (m.society) { %>
-            <a 
-              href="/societies/<%= m.society._id %>/dashboard" 
-              class="panel" 
+            <a
+              href="/societies/<%= m.society._id %>/dashboard"
+              class="panel"
               style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; text-decoration: none; border: 1px solid var(--border-medium); transition: border-color var(--transition-fast), background-color var(--transition-fast);"
               onmouseover="this.style.borderColor='var(--color-strong-divider)'; this.style.backgroundColor='var(--bg-surface-hover)';"
               onmouseout="this.style.borderColor='var(--border-medium)'; this.style.backgroundColor='var(--bg-surface)';"
@@ -158,4 +235,5 @@
   </div>
 </div>
 
+<script src="/js/society.js"></script>
 <%- include('../partials/footer') %>

@@ -1456,4 +1456,257 @@ describe('Issue Management Lifecycle, Privacy, and State Machine Tests', () => {
       assert.match(data.message, /not found in this society/i);
     });
   });
+
+  describe('Issue Optional Pagination & Backwards Compatibility Tests', () => {
+    let paginationIssueIds = [];
+
+    before(async () => {
+      // Ensure at least 4 distinct issues exist for deterministic pagination testing
+      const testIssuesData = [
+        {
+          title: 'Pagination Test Plumbing Alpha',
+          description: 'First plumbing issue for pagination testing.',
+          category: 'plumbing',
+          location: { type: 'common_area', areaDescription: 'Basement pump room' },
+          priority: 'high'
+        },
+        {
+          title: 'Pagination Test Plumbing Beta',
+          description: 'Second plumbing issue for pagination testing.',
+          category: 'plumbing',
+          location: { type: 'common_area', areaDescription: 'Ground floor pipe' },
+          priority: 'normal'
+        },
+        {
+          title: 'Pagination Test Electrical Gamma',
+          description: 'Electrical fixture issue for pagination testing.',
+          category: 'electrical',
+          location: { type: 'common_area', areaDescription: 'Main meter panel' },
+          priority: 'urgent'
+        },
+        {
+          title: 'Pagination Test Carpentry Delta',
+          description: 'Carpentry door hinge issue for pagination testing.',
+          category: 'carpentry',
+          location: { type: 'unit', blockOrWing: 'A', flatOrUnit: '101' },
+          priority: 'low'
+        }
+      ];
+
+      for (const item of testIssuesData) {
+        const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Cookie: resident1Cookie,
+            'X-CSRF-Token': extractRawCsrf(resident1Cookie)
+          },
+          body: JSON.stringify(item)
+        });
+        assert.strictEqual(res.status, 201);
+        const data = await res.json();
+        paginationIssueIds.push(data.issue._id);
+      }
+    });
+
+    test('Default unpaginated behavior returns all matching issues without pagination metadata', async () => {
+      const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues`, {
+        headers: { Cookie: adminACookie }
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+
+      assert.strictEqual(data.success, true);
+      assert.ok(Array.isArray(data.issues));
+      assert.strictEqual(typeof data.count, 'number');
+      assert.strictEqual(data.count, data.issues.length);
+      assert.ok(data.count >= 4);
+      // STRICT INVARIANT: pagination object is omitted in unpaginated mode
+      assert.strictEqual(data.pagination, undefined);
+    });
+
+    test('Page 1 returns the expected subset and accurate metadata', async () => {
+      const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?page=1&limit=2`, {
+        headers: { Cookie: adminACookie }
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+
+      assert.strictEqual(data.success, true);
+      assert.ok(Array.isArray(data.issues));
+      assert.strictEqual(data.issues.length, 2);
+      assert.strictEqual(data.count, 2);
+
+      assert.ok(data.pagination);
+      assert.strictEqual(data.pagination.page, 1);
+      assert.strictEqual(data.pagination.limit, 2);
+      assert.ok(data.pagination.total >= 4);
+      assert.strictEqual(data.pagination.totalPages, Math.ceil(data.pagination.total / 2));
+    });
+
+    test('Page 2 returns the next subset without overlap from Page 1', async () => {
+      const res1 = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?page=1&limit=2`, {
+        headers: { Cookie: adminACookie }
+      });
+      const data1 = await res1.json();
+
+      const res2 = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?page=2&limit=2`, {
+        headers: { Cookie: adminACookie }
+      });
+      assert.strictEqual(res2.status, 200);
+      const data2 = await res2.json();
+
+      assert.strictEqual(data2.success, true);
+      assert.strictEqual(data2.issues.length, 2);
+      assert.strictEqual(data2.count, 2);
+      assert.strictEqual(data2.pagination.page, 2);
+      assert.strictEqual(data2.pagination.limit, 2);
+      assert.strictEqual(data2.pagination.total, data1.pagination.total);
+
+      // Verify no overlapping IDs between page 1 and page 2
+      const page1Ids = data1.issues.map((i) => i._id);
+      const page2Ids = data2.issues.map((i) => i._id);
+      for (const id of page2Ids) {
+        assert.ok(!page1Ids.includes(id), `Page 2 ID ${id} must not appear in Page 1`);
+      }
+    });
+
+    test('Page defaults to 1 when only limit is specified', async () => {
+      const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?limit=3`, {
+        headers: { Cookie: adminACookie }
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.count, 3);
+      assert.strictEqual(data.pagination.page, 1);
+      assert.strictEqual(data.pagination.limit, 3);
+      assert.ok(data.pagination.total >= 4);
+    });
+
+    test('Limit defaults to 20 when only page is specified', async () => {
+      const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?page=1`, {
+        headers: { Cookie: adminACookie }
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.pagination.page, 1);
+      assert.strictEqual(data.pagination.limit, 20);
+      assert.strictEqual(data.pagination.totalPages, Math.ceil(data.pagination.total / 20));
+    });
+
+    test('Invalid page values return 400 Bad Request with descriptive message', async () => {
+      const invalidPages = ['0', '-1', 'abc', '1.5', ''];
+      for (const badPage of invalidPages) {
+        const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?page=${badPage}`, {
+          headers: { Cookie: adminACookie }
+        });
+        assert.strictEqual(res.status, 400, `Expected 400 for page="${badPage}"`);
+        const data = await res.json();
+        assert.strictEqual(data.success, false);
+        assert.match(data.message, /page parameter must be a positive integer/i);
+      }
+    });
+
+    test('Invalid limit values return 400 Bad Request with descriptive message', async () => {
+      const invalidLimits = ['0', '-5', '101', 'xyz', '10.5', ''];
+      for (const badLimit of invalidLimits) {
+        const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?limit=${badLimit}`, {
+          headers: { Cookie: adminACookie }
+        });
+        assert.strictEqual(res.status, 400, `Expected 400 for limit="${badLimit}"`);
+        const data = await res.json();
+        assert.strictEqual(data.success, false);
+        assert.match(data.message, /limit parameter must be an integer between 1 and 100/i);
+      }
+    });
+
+    test('Filters combine correctly with pagination and pagination.total reflects the filtered set', async () => {
+      const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?category=plumbing&page=1&limit=1`, {
+        headers: { Cookie: adminACookie }
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.count, 1);
+      assert.strictEqual(data.issues.length, 1);
+      assert.strictEqual(data.issues[0].category, 'plumbing');
+
+      // Total must reflect filtered plumbing count (at least 2 plumbing issues), not overall society count
+      assert.ok(data.pagination.total >= 2);
+      assert.strictEqual(data.pagination.limit, 1);
+      assert.strictEqual(data.pagination.totalPages, Math.ceil(data.pagination.total / 1));
+
+      // Querying with non-matching filter returns 0 total and 0 totalPages
+      const resNone = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?status=cancelled&category=plumbing&page=1&limit=5`, {
+        headers: { Cookie: adminACookie }
+      });
+      assert.strictEqual(resNone.status, 200);
+      const dataNone = await resNone.json();
+      assert.strictEqual(dataNone.count, 0);
+      assert.strictEqual(dataNone.pagination.total, 0);
+      assert.strictEqual(dataNone.pagination.totalPages, 0);
+      assert.deepStrictEqual(dataNone.issues, []);
+    });
+
+    test('Empty pages return a valid empty list and accurate metadata', async () => {
+      const res = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?page=999&limit=10`, {
+        headers: { Cookie: adminACookie }
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.count, 0);
+      assert.deepStrictEqual(data.issues, []);
+
+      assert.strictEqual(data.pagination.page, 999);
+      assert.strictEqual(data.pagination.limit, 10);
+      assert.ok(data.pagination.total >= 4);
+      assert.strictEqual(data.pagination.totalPages, Math.ceil(data.pagination.total / 10));
+    });
+
+    test('Existing authorization and privacy constraints remain strictly enforced in paginated mode', async () => {
+      // 1. Unauthenticated request rejected with 401
+      const resUnauth = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?page=1&limit=5`);
+      assert.strictEqual(resUnauth.status, 401);
+
+      // 2. Cross-society user rejected with 403
+      const resCross = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?page=1&limit=5`, {
+        headers: { Cookie: residentBCookie }
+      });
+      assert.strictEqual(resCross.status, 403);
+
+      // 3. Resident privacy: Resident 2 should not see Resident 1's private unit issue in paginated list
+      const resResident2 = await fetch(`${baseUrl}/api/societies/${societyAId}/issues?page=1&limit=50`, {
+        headers: { Cookie: resident2Cookie }
+      });
+      assert.strictEqual(resResident2.status, 200);
+      const dataResident2 = await resResident2.json();
+
+      // Check that Resident 1's private unit issue is strictly absent from Resident 2's paginated list
+      const resident2IssueIds = dataResident2.issues.map((i) => i._id.toString());
+      assert.ok(
+        !resident2IssueIds.includes(paginationIssueIds[3].toString()),
+        'Resident 2 must not see Resident 1 private unit issue in paginated list'
+      );
+
+      for (const issue of dataResident2.issues) {
+        if (issue.location && issue.location.type === 'unit') {
+          assert.notStrictEqual(
+            issue._id.toString(),
+            paginationIssueIds[3].toString(),
+            'Resident 2 must not see Resident 1 unit issue'
+          );
+        }
+        // Provider details and repair costs must be redacted
+        assert.strictEqual(issue.externalProviderDetails, undefined);
+        assert.strictEqual(issue.costs, undefined);
+      }
+    });
+  });
 });

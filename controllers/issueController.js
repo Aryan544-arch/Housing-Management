@@ -339,8 +339,37 @@ async function createIssue(req, res, next) {
  */
 async function listIssues(req, res, next) {
   try {
-    const { status, priority, category, myIssuesOnly } = req.query;
+    const { status, priority, category, myIssuesOnly, page: rawPageParam, limit: rawLimitParam } = req.query;
     const isResident = req.membership.role === 'resident';
+
+    // Optional pagination detection: enabled only when page or limit is supplied
+    const isPaginated = rawPageParam !== undefined || rawLimitParam !== undefined;
+    let page = 1;
+    let limit = 20;
+
+    if (isPaginated) {
+      if (rawPageParam !== undefined) {
+        const trimmedPage = String(rawPageParam).trim();
+        if (!/^\d+$/.test(trimmedPage) || Number(trimmedPage) < 1 || !Number.isInteger(Number(trimmedPage))) {
+          return res.status(400).json({
+            success: false,
+            message: 'Page parameter must be a positive integer greater than or equal to 1.'
+          });
+        }
+        page = parseInt(trimmedPage, 10);
+      }
+
+      if (rawLimitParam !== undefined) {
+        const trimmedLimit = String(rawLimitParam).trim();
+        if (!/^\d+$/.test(trimmedLimit) || Number(trimmedLimit) < 1 || Number(trimmedLimit) > 100 || !Number.isInteger(Number(trimmedLimit))) {
+          return res.status(400).json({
+            success: false,
+            message: 'Limit parameter must be an integer between 1 and 100.'
+          });
+        }
+        limit = parseInt(trimmedLimit, 10);
+      }
+    }
 
     const filter = { society: req.society._id };
 
@@ -373,18 +402,51 @@ async function listIssues(req, res, next) {
       filter.category = category;
     }
 
-    const issues = await Issue.find(filter)
-      .populate('submittingResident', 'name email phone')
-      .sort({ createdAt: -1 });
+    // Unpaginated mode (default when page and limit are omitted)
+    if (!isPaginated) {
+      const issues = await Issue.find(filter)
+        .populate('submittingResident', 'name email phone')
+        .sort({ createdAt: -1, _id: -1 });
+
+      const sanitizedIssues = issues.map((doc) =>
+        doc.toClientJSON(req.membership.role, req.user._id)
+      );
+
+      return res.status(200).json({
+        success: true,
+        count: sanitizedIssues.length,
+        issues: sanitizedIssues
+      });
+    }
+
+    // Paginated mode: database-level skip/limit with countDocuments
+    const skip = (page - 1) * limit;
+
+    const [total, issues] = await Promise.all([
+      Issue.countDocuments(filter),
+      Issue.find(filter)
+        .populate('submittingResident', 'name email phone')
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+    ]);
 
     const sanitizedIssues = issues.map((doc) =>
       doc.toClientJSON(req.membership.role, req.user._id)
     );
 
-    res.status(200).json({
+    const totalPages = Math.ceil(total / limit);
+
+    return res.status(200).json({
       success: true,
       count: sanitizedIssues.length,
-      issues: sanitizedIssues
+      issues: sanitizedIssues,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages
+      }
     });
   } catch (error) {
     next(error);
